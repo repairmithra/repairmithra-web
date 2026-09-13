@@ -6,12 +6,10 @@ import {
   FiWind,
   FiTool,
   FiZap,
-  FiMapPin,
 } from "react-icons/fi";
 
 function DesktopMenu() {
   const [serviceOpen, setServiceOpen] = useState(false);
-  const [locationOpen, setLocationOpen] = useState(false);
 
   const services = [
     {
@@ -39,13 +37,6 @@ function DesktopMenu() {
       title: "Electrical",
       desc: "Wiring • Switches • Fans",
     },
-  ];
-
-  const locations = [
-    "Hyderabad",
-    "Warangal",
-    "Jangaon",
-    "Karimnagar",
   ];
 
   return (
@@ -87,35 +78,6 @@ function DesktopMenu() {
                   </p>
                 </div>
 
-              </button>
-            ))}
-
-          </div>
-        )}
-      </div>
-
-      {/* Locations */}
-
-      <div
-        className="relative"
-        onMouseEnter={() => setLocationOpen(true)}
-        onMouseLeave={() => setLocationOpen(false)}
-      >
-        <button className="flex items-center gap-1 font-medium text-slate-700 hover:text-blue-600 transition">
-          Locations
-          <FiChevronDown className="text-sm" />
-        </button>
-
-        {locationOpen && (
-          <div className="absolute top-12 left-0 w-60 rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
-
-            {locations.map((city) => (
-              <button
-                key={city}
-                className="flex items-center gap-3 w-full p-4 hover:bg-blue-50 transition text-left"
-              >
-                <FiMapPin className="text-blue-600" />
-                {city}
               </button>
             ))}
 
