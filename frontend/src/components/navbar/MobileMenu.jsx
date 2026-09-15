@@ -9,7 +9,13 @@ import {
   FiTool,
   FiZap,
   FiMapPin,
+  FiUser,
+  FiBriefcase,
+  FiCalendar,
 } from "react-icons/fi";
+
+import SearchBar from "./SearchBar";
+import LocationSelector from "./LocationSelector";
 
 function MobileMenu({ open, setOpen }) {
   const [serviceOpen, setServiceOpen] = useState(false);
@@ -71,6 +77,12 @@ function MobileMenu({ open, setOpen }) {
         </div>
 
         <div className="p-6 space-y-2">
+
+          {/* Search Bar */}
+          <SearchBar className="mb-3 w-full" />
+
+          {/* Location Selector */}
+          <LocationSelector className="mb-4 w-full" />
 
           <button className="block w-full text-left py-3 font-medium">
             Home
@@ -153,18 +165,6 @@ function MobileMenu({ open, setOpen }) {
           <button className="block w-full text-left py-3 font-medium">
             Contact
           </button>
-
-          <div className="pt-6 space-y-4">
-
-            <button className="w-full rounded-xl bg-blue-600 py-3 text-white font-semibold hover:bg-blue-700 transition">
-              Book Service
-            </button>
-
-            <button className="w-full rounded-xl bg-slate-900 py-3 text-white font-semibold hover:bg-slate-800 transition">
-              Join as Pro
-            </button>
-
-          </div>
 
         </div>
 
