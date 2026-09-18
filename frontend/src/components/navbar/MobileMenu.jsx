@@ -1,13 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiX,
   FiChevronDown,
   FiChevronUp,
-  FiSmartphone,
-  FiMonitor,
-  FiWind,
-  FiTool,
-  FiZap,
   FiMapPin,
   FiUser,
   FiBriefcase,
@@ -15,43 +11,13 @@ import {
 } from "react-icons/fi";
 
 import SearchBar from "./SearchBar";
-import LocationSelector from "./LocationSelector";
+import LocationSelector, { LOCATIONS } from "./LocationSelector";
 
-function MobileMenu({ open, setOpen }) {
-  const [serviceOpen, setServiceOpen] = useState(false);
+function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
+  const navigate = useNavigate();
   const [locationOpen, setLocationOpen] = useState(false);
 
   if (!open) return null;
-
-  const services = [
-    {
-      icon: <FiSmartphone />,
-      title: "Mobile Repair",
-    },
-    {
-      icon: <FiMonitor />,
-      title: "Laptop Repair",
-    },
-    {
-      icon: <FiWind />,
-      title: "AC Repair",
-    },
-    {
-      icon: <FiTool />,
-      title: "Plumbing",
-    },
-    {
-      icon: <FiZap />,
-      title: "Electrical",
-    },
-  ];
-
-  const locations = [
-    "Hyderabad",
-    "Warangal",
-    "Jangaon",
-    "Karimnagar",
-  ];
 
   return (
     <>
@@ -82,7 +48,11 @@ function MobileMenu({ open, setOpen }) {
           <SearchBar className="mb-3 w-full" />
 
           {/* Location Selector */}
-          <LocationSelector className="mb-4 w-full" />
+          <LocationSelector
+            className="mb-4 w-full"
+            selected={selectedLocation}
+            onSelect={setSelectedLocation}
+          />
 
           <button className="block w-full text-left py-3 font-medium">
             Home
@@ -90,40 +60,9 @@ function MobileMenu({ open, setOpen }) {
 
           {/* Services */}
 
-          <button
-            onClick={() => setServiceOpen(!serviceOpen)}
-            className="flex justify-between w-full py-3 font-medium"
-          >
+          <button className="block w-full text-left py-3 font-medium">
             Services
-
-            {serviceOpen ? (
-              <FiChevronUp />
-            ) : (
-              <FiChevronDown />
-            )}
           </button>
-
-          {serviceOpen && (
-
-            <div className="pl-5 pb-3 space-y-3">
-
-              {services.map((service) => (
-
-                <button
-                  key={service.title}
-                  className="flex items-center gap-3"
-                >
-                  {service.icon}
-
-                  {service.title}
-
-                </button>
-
-              ))}
-
-            </div>
-
-          )}
 
           {/* Locations */}
 
@@ -144,11 +83,17 @@ function MobileMenu({ open, setOpen }) {
 
             <div className="pl-5 pb-3 space-y-3">
 
-              {locations.map((city) => (
+              {LOCATIONS.map((city) => (
 
                 <button
                   key={city}
-                  className="flex items-center gap-3"
+                  onClick={() => {
+                    setSelectedLocation(city);
+                    setLocationOpen(false);
+                  }}
+                  className={`flex items-center gap-3 ${
+                    selectedLocation === city ? "font-semibold text-blue-600" : ""
+                  }`}
                 >
                   <FiMapPin />
 
@@ -162,9 +107,31 @@ function MobileMenu({ open, setOpen }) {
 
           )}
 
-          <button className="block w-full text-left py-3 font-medium">
-            Contact
-          </button>
+
+          <div className="pt-6 space-y-3">
+
+            <button className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-blue-600 py-3 text-blue-600 font-semibold hover:bg-blue-50 transition">
+              <FiBriefcase size={18} />
+              Join as Partner
+            </button>
+
+            <button className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-900 py-3 text-slate-900 font-semibold hover:bg-slate-50 transition">
+              <FiCalendar size={18} />
+              Book a Service
+            </button>
+
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/login");
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-white font-semibold hover:bg-blue-700 transition"
+            >
+              <FiUser size={18} />
+              Login
+            </button>
+
+          </div>
 
         </div>
 
