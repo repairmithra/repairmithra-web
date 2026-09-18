@@ -1,6 +1,16 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  FiUser,
+  FiMail,
+  FiLock,
+  FiEye,
+  FiEyeOff,
+  FiPhone,
+  FiUserPlus,
+  FiAlertCircle,
+  FiCheckCircle,
+} from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
 
@@ -8,17 +18,22 @@ import logo from "../../assets/images/repairmithra-logo.png";
 // In dev, requests to "/api/..." are proxied to the backend (see vite.config.js).
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-function Login() {
+function Register() {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+  });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const redirectTo = location.state?.from || "/";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -34,16 +49,34 @@ function Login() {
   const validate = () => {
     const newErrors = {};
 
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = "Full name is required";
+    } else if (formData.fullName.trim().length < 2) {
+      newErrors.fullName = "Enter your full name";
+    }
+
     if (!formData.email.trim()) {
       newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Enter a valid email address";
     }
 
+    if (!formData.phone.trim()) {
+      newErrors.phone = "Phone number is required";
+    } else if (!/^[0-9]{10}$/.test(formData.phone.trim())) {
+      newErrors.phone = "Enter a valid 10-digit phone number";
+    }
+
     if (!formData.password) {
       newErrors.password = "Password is required";
     } else if (formData.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters";
+    }
+
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+    } else if (formData.confirmPassword !== formData.password) {
+      newErrors.confirmPassword = "Passwords do not match";
     }
 
     setErrors(newErrors);
@@ -53,17 +86,20 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError("");
+    setSuccessMessage("");
 
     if (!validate()) return;
 
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          fullName: formData.fullName.trim(),
           email: formData.email.trim(),
+          phone: formData.phone.trim(),
           password: formData.password,
         }),
       });
@@ -76,14 +112,15 @@ function Login() {
       }
 
       if (!response.ok || !data.success) {
-        throw new Error(data.message || "Invalid email or password");
+        throw new Error(data.message || "Could not create your account");
       }
 
-      // Persist auth token + user for the rest of the app to use
-      localStorage.setItem("rm_token", data.token);
-      localStorage.setItem("rm_user", JSON.stringify(data.data));
+      setSuccessMessage("Account created! Redirecting to login...");
 
-      navigate(redirectTo, { replace: true });
+      // Send the user to the login page after a brief confirmation pause
+      setTimeout(() => {
+        navigate("/login", { replace: true });
+      }, 1200);
     } catch (err) {
       setServerError(
         err.message === "Failed to fetch"
@@ -108,9 +145,9 @@ function Login() {
               className="h-20 w-auto object-contain"
             />
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Welcome back</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Log in to manage your bookings
+            Sign up to book and track your repairs
           </p>
         </div>
 
@@ -124,7 +161,41 @@ function Login() {
             </div>
           )}
 
+          {successMessage && (
+            <div className="mb-5 flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+              <FiCheckCircle className="mt-0.5 shrink-0" size={16} />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} noValidate>
+
+            {/* Full Name */}
+            <div className="mb-5">
+              <label htmlFor="fullName" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Full Name
+              </label>
+              <div className="relative">
+                <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  autoComplete="name"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  placeholder="Jane Doe"
+                  className={`w-full rounded-xl border py-3 pl-10 pr-4 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
+                    errors.fullName
+                      ? "border-red-400 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200 focus:border-blue-500"
+                  }`}
+                />
+              </div>
+              {errors.fullName && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.fullName}</p>
+              )}
+            </div>
 
             {/* Email */}
             <div className="mb-5">
@@ -153,8 +224,35 @@ function Login() {
               )}
             </div>
 
+            {/* Phone */}
+            <div className="mb-5">
+              <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Phone Number
+              </label>
+              <div className="relative">
+                <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="9876543210"
+                  className={`w-full rounded-xl border py-3 pl-10 pr-4 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
+                    errors.phone
+                      ? "border-red-400 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200 focus:border-blue-500"
+                  }`}
+                />
+              </div>
+              {errors.phone && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.phone}</p>
+              )}
+            </div>
+
             {/* Password */}
-            <div className="mb-2">
+            <div className="mb-5">
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
                 Password
               </label>
@@ -164,7 +262,7 @@ function Login() {
                   id="password"
                   name="password"
                   type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="••••••••"
@@ -189,13 +287,40 @@ function Login() {
               )}
             </div>
 
-            <div className="flex justify-end mb-6">
-              <Link
-                to="/forgot-password"
-                className="text-sm font-medium text-blue-600 hover:text-blue-700"
-              >
-                Forgot password?
-              </Link>
+            {/* Confirm Password */}
+            <div className="mb-6">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className={`w-full rounded-xl border py-3 pl-10 pr-11 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
+                    errors.confirmPassword
+                      ? "border-red-400 focus:ring-red-200"
+                      : "border-gray-300 focus:ring-blue-200 focus:border-blue-500"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                </button>
+              </div>
+              {errors.confirmPassword && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.confirmPassword}</p>
+              )}
             </div>
 
             <button
@@ -206,21 +331,21 @@ function Login() {
               {isLoading ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                  Logging in...
+                  Creating account...
                 </>
               ) : (
                 <>
-                  <FiLogIn size={18} />
-                  Log In
+                  <FiUserPlus size={18} />
+                  Sign Up
                 </>
               )}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-600">
-            Don&apos;t have an account?{" "}
-            <Link to="/register" className="font-semibold text-blue-600 hover:text-blue-700">
-              Sign up
+            Already have an account?{" "}
+            <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700">
+              Log in
             </Link>
           </p>
         </div>
@@ -235,4 +360,4 @@ function Login() {
   );
 }
 
-export default Login;
+export default Register;
