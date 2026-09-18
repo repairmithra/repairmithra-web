@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FiMenu, FiUser, FiBriefcase, FiCalendar } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
@@ -7,14 +8,16 @@ import TopBar from "./TopBar";
 import DesktopMenu from "./DesktopMenu";
 import MobileMenu from "./MobileMenu";
 import SearchBar from "./SearchBar";
-import LocationSelector from "./LocationSelector";
+import LocationSelector, { LOCATIONS } from "./LocationSelector";
 
 function Navbar() {
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(LOCATIONS[0]);
 
   return (
     <>
-      <TopBar />
+      <TopBar location={selectedLocation} />
 
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200">
         <div className="mx-auto flex h-20 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
@@ -32,7 +35,11 @@ function Navbar() {
           <SearchBar className="hidden md:flex flex-1 max-w-md" />
 
           {/* Location Selector */}
-          <LocationSelector className="hidden lg:block w-52 shrink-0" />
+          <LocationSelector
+            className="hidden lg:block w-52 shrink-0"
+            selected={selectedLocation}
+            onSelect={setSelectedLocation}
+          />
 
           {/* Desktop Navigation */}
           <DesktopMenu />
@@ -62,7 +69,10 @@ function Navbar() {
               Join as Partner
             </button>
 
+          
+
             <button
+              onClick={() => navigate("/login")}
               className="
                 flex
                 items-center
@@ -101,6 +111,8 @@ function Navbar() {
       <MobileMenu
         open={mobileOpen}
         setOpen={setMobileOpen}
+        selectedLocation={selectedLocation}
+        setSelectedLocation={setSelectedLocation}
       />
     </>
   );
