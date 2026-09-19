@@ -6,6 +6,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      minlength: 2,
+      maxlength: 60,
     },
 
     email: {
@@ -20,12 +22,29 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      match: /^[6-9][0-9]{9}$/,
+    },
+
+    address: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 5,
+      maxlength: 250,
+    },
+
+    pincode: {
+      type: String,
+      required: true,
+      trim: true,
+      match: /^[0-9]{6}$/,
     },
 
     password: {
       type: String,
       required: true,
-      minlength: 6,
+      minlength: 8,
     },
 
     role: {

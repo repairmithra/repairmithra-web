@@ -6,7 +6,6 @@ import Footer from "./sections/footer/Footer";
 import Home from "./pages/home/Home";
 import Login from "./pages/login/Login";
 import Registration from "./pages/register/Registration";
-
 function App() {
   return (
     <>
