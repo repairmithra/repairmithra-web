@@ -1,13 +1,18 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FiSearch } from "react-icons/fi";
 
-function SearchBar({ className = "" }) {
+function SearchBar({ className = "", onSearch }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // TODO: wire this up to actual search/navigation logic
-    console.log("Searching for:", query);
+
+    // The services page reads ?q= and filters its list
+    const trimmed = query.trim();
+    navigate(trimmed ? `/services?q=${encodeURIComponent(trimmed)}` : "/services");
+    onSearch?.();
   };
 
   return (
@@ -22,6 +27,7 @@ function SearchBar({ className = "" }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search for services, e.g. AC repair, plumbing..."
+        aria-label="Search for services"
         className="w-full bg-transparent text-sm text-slate-700 placeholder:text-gray-400 focus:outline-none"
       />
     </form>

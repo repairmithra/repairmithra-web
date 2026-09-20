@@ -1,67 +1,12 @@
-import ServiceCard from "./ServiceCard";
+import { useNavigate } from "react-router-dom";
 
-import laptop from "../../assets/images/services/laptop.jpg";
-import mobile from "../../assets/images/services/mobile.jpg";
-import ac from "../../assets/images/services/ac.jpg";
-import plumbing from "../../assets/images/services/plumbing.jpg";
-import electrical from "../../assets/images/services/electrical.jpg";
-import cleaning from "../../assets/images/services/cleaning.jpg";
-import civilRepair from "../../assets/images/services/civil-repair.jpg";
-import wallPainting from "../../assets/images/services/wall-painting.jpg";
+import ServiceCard from "./ServiceCard";
+import { services } from "../../data/servicesData";
 
 import { FiArrowRight } from "react-icons/fi";
 
 function Services() {
-  const services = [
-    {
-      image: laptop,
-      title: "Laptop Repair",
-      description:
-        "Hardware repair, software troubleshooting, motherboard repair and performance optimization.",
-    },
-    {
-      image: mobile,
-      title: "Mobile Repair",
-      description:
-        "Screen replacement, battery replacement, charging issues and software repair.",
-    },
-    {
-      image: ac,
-      title: "AC Repair",
-      description:
-        "Installation, gas filling, servicing and complete air conditioner maintenance.",
-    },
-    {
-      image: plumbing,
-      title: "Plumbing",
-      description:
-        "Leak repairs, pipe fitting, bathroom maintenance and kitchen plumbing services.",
-    },
-    {
-      image: electrical,
-      title: "Electrical",
-      description:
-        "Switchboard installation, wiring, fan installation and electrical repairs.",
-    },
-    {
-      image: cleaning,
-      title: "Home Cleaning",
-      description:
-        "Professional home deep cleaning for kitchens, bathrooms and complete homes.",
-    },
-    {
-  image: civilRepair,
-  title: "Civil Repair",
-  description:
-    "Wall repairs, tile work, plastering, masonry work and other home civil maintenance services.",
-},
-{
-  image: wallPainting,
-  title: "Wall Painting",
-  description:
-    "Professional interior and exterior wall painting, touch-ups and complete painting services.",
-},
-  ];
+  const navigate = useNavigate();
 
   return (
     <section className="bg-slate-50 py-24">
@@ -89,15 +34,18 @@ function Services() {
 
         {/* Cards */}
 
-        <div className="mt-16 grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-16 grid gap-8 md:grid-cols-2 xl:grid-cols-4">
 
           {services.map((service) => (
 
             <ServiceCard
-              key={service.title}
-              image={service.image}
+              key={service.slug}
+              slug={service.slug}
+              icon={service.icon}
+              tone={service.tone}
               title={service.title}
               description={service.description}
+              visitFee={service.visitFee}
             />
 
           ))}
@@ -109,6 +57,7 @@ function Services() {
         <div className="mt-16 flex justify-center">
 
           <button
+            onClick={() => navigate("/services")}
             className="
               flex
               items-center

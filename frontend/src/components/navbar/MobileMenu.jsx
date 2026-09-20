@@ -45,7 +45,7 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
         <div className="p-6 space-y-2">
 
           {/* Search Bar */}
-          <SearchBar className="mb-3 w-full" />
+          <SearchBar className="mb-3 w-full" onSearch={() => setOpen(false)} />
 
           {/* Location Selector */}
           <LocationSelector
@@ -54,13 +54,25 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
             onSelect={setSelectedLocation}
           />
 
-          <button className="block w-full text-left py-3 font-medium">
+          <button
+            onClick={() => {
+              setOpen(false);
+              navigate("/");
+            }}
+            className="block w-full text-left py-3 font-medium"
+          >
             Home
           </button>
 
           {/* Services */}
 
-          <button className="block w-full text-left py-3 font-medium">
+          <button
+            onClick={() => {
+              setOpen(false);
+              navigate("/services");
+            }}
+            className="block w-full text-left py-3 font-medium"
+          >
             Services
           </button>
 
@@ -115,7 +127,12 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
               Join as Partner
             </button>
 
-            <button className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-900 py-3 text-slate-900 font-semibold hover:bg-slate-50 transition">
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/services");
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-900 py-3 text-slate-900 font-semibold hover:bg-slate-50 transition">
               <FiCalendar size={18} />
               Book a Service
             </button>
