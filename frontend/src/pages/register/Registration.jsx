@@ -11,19 +11,16 @@ import {
   FiMapPin,
   FiShield,
   FiCheckCircle,
+  FiStar,
   FiArrowLeft,
+  FiAlertCircle,
 } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
 
 const API_BASE = "http://localhost:5000";
-
 function Registration() {
   const navigate = useNavigate();
-
-  // ======================================================
-  // FORM DATA
-  // ======================================================
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -36,42 +33,24 @@ function Registration() {
     confirmPassword: "",
   });
 
-  // ======================================================
-  // UI STATES
-  // ======================================================
-
-  const [showPassword, setShowPassword] =
-    useState(false);
-
+  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState("");
 
-  const [serverError, setServerError] =
-    useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
-  const [isSendingCode, setIsSendingCode] =
-    useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
-  const [isVerifyingCode, setIsVerifyingCode] =
-    useState(false);
-
-  const [isLoading, setIsLoading] =
-    useState(false);
-
-  const [codeSent, setCodeSent] =
-    useState(false);
-
-  const [otpVerified, setOtpVerified] =
-    useState(false);
-
-  const [resendCountdown, setResendCountdown] =
-    useState(0);
-
-  // ======================================================
+  // ==========================================
   // RESEND COUNTDOWN
-  // ======================================================
+  // ==========================================
 
   useEffect(() => {
     if (resendCountdown <= 0) {
@@ -92,9 +71,9 @@ function Registration() {
     return () => clearInterval(timer);
   }, [resendCountdown]);
 
-  // ======================================================
-  // HANDLE INPUT CHANGE
-  // ======================================================
+  // ==========================================
+  // HANDLE CHANGE
+  // ==========================================
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -104,7 +83,6 @@ function Registration() {
       [name]: value,
     }));
 
-    // Clear field error
     if (errors[name]) {
       setErrors((previous) => ({
         ...previous,
@@ -116,10 +94,7 @@ function Registration() {
       setServerError("");
     }
 
-    // --------------------------------------------------
-    // EMAIL CHANGED
-    // --------------------------------------------------
-
+    // If email changes, old OTP is no longer valid
     if (name === "email") {
       setCodeSent(false);
       setOtpVerified(false);
@@ -131,226 +106,13 @@ function Registration() {
         verificationCode: "",
       }));
     }
-
-    // --------------------------------------------------
-    // OTP CHANGED
-    // --------------------------------------------------
-
-    if (name === "verificationCode") {
-      setOtpVerified(false);
-    }
   };
 
-  // ======================================================
-  // EMAIL VALIDATION
-  // ======================================================
+  // ==========================================
+  // VALIDATION
+  // ==========================================
 
-  const isValidEmail = (email) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(
-      email.trim()
-    );
-  };
-
-  // ======================================================
-  // SEND OTP
-  // ======================================================
-
-  const sendVerificationCode = async () => {
-    const email = formData.email.trim();
-
-    // Don't send during countdown
-    if (resendCountdown > 0) {
-      return;
-    }
-
-    // Validate email
-    if (!email) {
-      setErrors((previous) => ({
-        ...previous,
-        email: "Enter your email address first",
-      }));
-
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      setErrors((previous) => ({
-        ...previous,
-        email: "Enter a valid email address",
-      }));
-
-      return;
-    }
-
-    setIsSendingCode(true);
-    setServerError("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE}/api/auth/send-verification-code`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            email: email.toLowerCase(),
-          }),
-        }
-      );
-
-      let data = {};
-
-      try {
-        data = await response.json();
-      } catch {
-        data = {};
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            "Unable to send verification code"
-        );
-      }
-
-      // OTP sent
-      setCodeSent(true);
-
-      // New OTP means previous verification is invalid
-      setOtpVerified(false);
-
-      // Clear previous OTP
-      setFormData((previous) => ({
-        ...previous,
-        verificationCode: "",
-      }));
-
-      setErrors((previous) => ({
-        ...previous,
-        email: "",
-        verificationCode: "",
-      }));
-
-      // 60 second resend timer
-      setResendCountdown(60);
-    } catch (error) {
-      console.error(
-        "Send OTP error:",
-        error
-      );
-
-      setServerError(
-        error.message ||
-          "Unable to send verification code"
-      );
-    } finally {
-      setIsSendingCode(false);
-    }
-  };
-
-  // ======================================================
-  // VERIFY OTP
-  // ======================================================
-
-  const verifyVerificationCode = async () => {
-    const email =
-      formData.email.trim().toLowerCase();
-
-    const verificationCode =
-      formData.verificationCode.trim();
-
-    if (!verificationCode) {
-      setErrors((previous) => ({
-        ...previous,
-        verificationCode:
-          "Enter the verification code",
-      }));
-
-      return;
-    }
-
-    if (!/^\d{6}$/.test(verificationCode)) {
-      setErrors((previous) => ({
-        ...previous,
-        verificationCode:
-          "Verification code must be 6 digits",
-      }));
-
-      return;
-    }
-
-    setIsVerifyingCode(true);
-    setServerError("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE}/api/auth/verify-verification-code`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            email,
-            verificationCode,
-          }),
-        }
-      );
-
-      let data = {};
-
-      try {
-        data = await response.json();
-      } catch {
-        data = {};
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            "Invalid verification code"
-        );
-      }
-
-      // ------------------------------------------
-      // SUCCESS
-      // ------------------------------------------
-
-      setOtpVerified(true);
-
-      setErrors((previous) => ({
-        ...previous,
-        verificationCode: "",
-      }));
-    } catch (error) {
-      console.error(
-        "Verify OTP error:",
-        error
-      );
-
-      setOtpVerified(false);
-
-      setErrors((previous) => ({
-        ...previous,
-        verificationCode:
-          error.message ||
-          "Invalid verification code",
-      }));
-    } finally {
-      setIsVerifyingCode(false);
-    }
-  };
-
-  // ======================================================
-  // VALIDATE COMPLETE FORM
-  // ======================================================
-
-  const validateForm = () => {
+  const validate = () => {
     const newErrors = {};
 
     // ------------------------------------------
@@ -361,17 +123,11 @@ function Registration() {
       /^[A-Za-z]+(?:[ '-][A-Za-z]+)*$/;
 
     if (!formData.fullName.trim()) {
-      newErrors.fullName =
-        "Full name is required";
+      newErrors.fullName = "Full name is required";
+    } else if (formData.fullName.trim().length < 2) {
+      newErrors.fullName = "Enter a valid name";
     } else if (
-      formData.fullName.trim().length < 2
-    ) {
-      newErrors.fullName =
-        "Enter a valid name";
-    } else if (
-      !nameRegex.test(
-        formData.fullName.trim()
-      )
+      !nameRegex.test(formData.fullName.trim())
     ) {
       newErrors.fullName =
         "Name should contain letters and spaces only";
@@ -381,23 +137,36 @@ function Registration() {
     // EMAIL
     // ------------------------------------------
 
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
     if (!formData.email.trim()) {
       newErrors.email =
         "Email address is required";
     } else if (
-      !isValidEmail(formData.email)
+      !emailRegex.test(formData.email.trim())
     ) {
       newErrors.email =
         "Enter a valid email address";
     }
 
     // ------------------------------------------
-    // OTP
+    // VERIFICATION CODE
     // ------------------------------------------
 
     if (!codeSent) {
       newErrors.verificationCode =
-        "Please send OTP first";
+        "Please send the verification code first";
+    } else if (!formData.verificationCode.trim()) {
+      newErrors.verificationCode =
+        "Email verification code is required";
+    } else if (
+      !/^\d{6}$/.test(
+        formData.verificationCode
+      )
+    ) {
+      newErrors.verificationCode =
+        "Verification code must be 6 digits";
     } else if (!otpVerified) {
       newErrors.verificationCode =
         "Please verify your email first";
@@ -411,9 +180,7 @@ function Registration() {
       newErrors.phone =
         "Phone number is required";
     } else if (
-      !/^[6-9]\d{9}$/.test(
-        formData.phone.trim()
-      )
+      !/^[6-9]\d{9}$/.test(formData.phone)
     ) {
       newErrors.phone =
         "Enter a valid 10-digit Indian mobile number";
@@ -441,9 +208,7 @@ function Registration() {
       newErrors.pincode =
         "Pincode is required";
     } else if (
-      !/^\d{6}$/.test(
-        formData.pincode.trim()
-      )
+      !/^\d{6}$/.test(formData.pincode)
     ) {
       newErrors.pincode =
         "Enter a valid 6-digit pincode";
@@ -492,21 +257,210 @@ function Registration() {
 
     setErrors(newErrors);
 
-    return (
-      Object.keys(newErrors).length === 0
-    );
+    return Object.keys(newErrors).length === 0;
   };
 
-  // ======================================================
-  // CREATE ACCOUNT
-  // ======================================================
+  // ==========================================
+  // SEND VERIFICATION CODE
+  // ==========================================
+
+  const sendVerificationCode = async () => {
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    const email = formData.email.trim();
+
+    // Don't allow resend during countdown
+    if (resendCountdown > 0) {
+      return;
+    }
+
+    // Validate email first
+    if (!email) {
+      setErrors((previous) => ({
+        ...previous,
+        email:
+          "Enter your email address first",
+      }));
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      setErrors((previous) => ({
+        ...previous,
+        email:
+          "Enter a valid email address",
+      }));
+      return;
+    }
+
+    setIsSendingCode(true);
+    setServerError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/auth/send-verification-code`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+          }),
+        }
+      );
+
+      let data = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "Unable to send verification code"
+        );
+      }
+
+      // Code successfully sent
+      setCodeSent(true);
+      setOtpVerified(false);
+
+      // Clear old OTP
+      setFormData((previous) => ({
+        ...previous,
+        verificationCode: "",
+      }));
+
+      setErrors((previous) => ({
+        ...previous,
+        email: "",
+        verificationCode: "",
+      }));
+
+      // Start 60 second countdown
+      setResendCountdown(60);
+    } catch (error) {
+      console.error(
+        "Verification code error:",
+        error
+      );
+
+      if (
+        error.message === "Failed to fetch"
+      ) {
+        setServerError(
+          "Could not reach the server. Please check your connection and try again."
+        );
+      } else {
+        setServerError(
+          error.message ||
+            "Unable to send verification code"
+        );
+      }
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  // ==========================================
+  // VERIFY OTP
+  // ==========================================
+
+  const verifyOtp = async () => {
+    setServerError("");
+
+    const email = formData.email.trim().toLowerCase();
+    const verificationCode = formData.verificationCode.trim();
+
+    if (!codeSent) {
+      setErrors((previous) => ({
+        ...previous,
+        verificationCode:
+          "Please send the verification code first",
+      }));
+      return;
+    }
+
+    if (!/^\d{6}$/.test(verificationCode)) {
+      setErrors((previous) => ({
+        ...previous,
+        verificationCode:
+          "Enter the 6-digit verification code",
+      }));
+      setOtpVerified(false);
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/auth/verify-verification-code`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            verificationCode,
+          }),
+        }
+      );
+
+      let data = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Invalid verification code"
+        );
+      }
+
+      setOtpVerified(true);
+
+      setErrors((previous) => ({
+        ...previous,
+        verificationCode: "",
+      }));
+
+      setServerError("");
+    } catch (error) {
+      console.error("OTP verification error:", error);
+
+      setOtpVerified(false);
+
+      setErrors((previous) => ({
+        ...previous,
+        verificationCode:
+          error.message || "Invalid verification code",
+      }));
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // ==========================================
+  // SUBMIT REGISTRATION
+  // ==========================================
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setServerError("");
 
-    if (!validateForm()) {
+    // Frontend validation
+    if (!validate()) {
       return;
     }
 
@@ -517,31 +471,25 @@ function Registration() {
         `${API_BASE}/api/auth/register`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             fullName:
               formData.fullName.trim(),
 
             email:
-              formData.email
-                .trim()
-                .toLowerCase(),
+              formData.email.trim().toLowerCase(),
 
             verificationCode:
               formData.verificationCode,
 
-            phone:
-              formData.phone.trim(),
+            phone: formData.phone,
 
             address:
               formData.address.trim(),
 
-            pincode:
-              formData.pincode.trim(),
+            pincode: formData.pincode,
 
             password:
               formData.password,
@@ -564,10 +512,6 @@ function Registration() {
         );
       }
 
-      // ------------------------------------------
-      // SUCCESS
-      // ------------------------------------------
-
       alert(
         "Account created successfully!"
       );
@@ -585,153 +529,395 @@ function Registration() {
         error
       );
 
-      setServerError(
-        error.message ||
-          "Registration failed"
-      );
+      if (
+        error.message === "Failed to fetch"
+      ) {
+        setServerError(
+          "Could not reach the server. Please check your connection and try again."
+        );
+      } else {
+        setServerError(
+          error.message ||
+            "Registration failed"
+        );
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ======================================================
+  // ==========================================
   // INPUT CLASS
-  // ======================================================
+  // ==========================================
 
-  const inputClass = (field) => `
-    w-full
-    h-[54px]
-    rounded-[10px]
-    border
-    bg-white
-    px-3
-    text-[15px]
-    text-[#315d85]
+  const inputClass = (field) =>
+    `w-full h-[54px] rounded-[10px] border bg-white
+    px-3 text-[15px] text-[#315d85]
     placeholder:text-[#88a2bd]
-    outline-none
-    transition
+    outline-none transition
     ${
       errors[field]
         ? "border-red-400 focus:ring-2 focus:ring-red-100"
-        : "border-[#d7e5f2] focus:border-[#1478e8] focus:ring-2 focus:ring-[#1478e8]/10"
-    }
-  `;
+        : "border-[#cddded] focus:border-[#1976ed] focus:ring-2 focus:ring-blue-100"
+    }`;
 
-  // ======================================================
-  // RENDER
-  // ======================================================
+  // ==========================================
+  // RETURN UI
+  // ==========================================
 
   return (
-    <div className="min-h-screen bg-[#eef6ff] px-4 py-8">
+    <div className="min-h-screen bg-[#eef6ff] flex items-center justify-center p-[30px] relative">
 
-      <div className="mx-auto w-full max-w-[620px]">
+      {/* ======================================
+          BACK BUTTON
+      ====================================== */}
 
-        {/* ==========================================
-            BACK TO LOGIN
-        ========================================== */}
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="
+          fixed
+          top-6
+          left-6
+          z-50
+          w-11
+          h-11
+          rounded-full
+          bg-white
+          border
+          border-gray-200
+          shadow-md
+          flex
+          items-center
+          justify-center
+          text-gray-600
+          hover:text-[#1976ed]
+          hover:shadow-lg
+          transition
+        "
+        aria-label="Go back"
+      >
+        <FiArrowLeft size={22} />
+      </button>
 
-        <div className="mb-5">
+      {/* ======================================
+          MAIN CARD
+      ====================================== */}
 
-          <Link
-            to="/login"
-            className="
-              inline-flex
-              items-center
-              gap-2
-              text-[14px]
-              font-semibold
-              text-[#1478e8]
-              hover:text-[#0d69d0]
-            "
-          >
-            <FiArrowLeft size={16} />
-            Back to Login
-          </Link>
+      <div
+        className="
+          w-full
+          max-w-[1100px]
+          min-h-[650px]
+          grid
+          grid-cols-1
+          lg:grid-cols-[48%_52%]
+          bg-white
+          rounded-[22px]
+          overflow-hidden
+          shadow-[0_15px_40px_rgba(20,70,120,0.15)]
+        "
+      >
 
-        </div>
-
-        {/* ==========================================
-            CARD
-        ========================================== */}
+        {/* ====================================
+            LEFT SIDE
+        ==================================== */}
 
         <div
           className="
-            rounded-[18px]
-            bg-white
-            px-5
-            py-7
-            shadow-[0_10px_35px_rgba(30,100,160,0.10)]
-            sm:px-8
-            sm:py-9
+            relative
+            min-h-[400px]
+            lg:min-h-[650px]
+            p-[32px]
+            flex
+            flex-col
+            justify-between
+            bg-cover
+            bg-center
           "
+          style={{
+            backgroundImage: `
+              linear-gradient(
+                to bottom,
+                rgba(0,43,92,0.05),
+                rgba(0,55,115,0.90)
+              ),
+              url("/repair-worker.jpg")
+            `,
+          }}
         >
 
-          {/* ==========================================
-              LOGO
-          ========================================== */}
+          {/* LOGO */}
 
-          <div className="mb-7 text-center">
-
+          <Link to="/">
             <img
               src={logo}
-              alt="RepairMithra"
+              alt="RepairMithra Logo"
               className="
-                mx-auto
+                w-[180px]
                 h-auto
-                w-[155px]
+                object-contain
               "
             />
+          </Link>
+
+          {/* LEFT CONTENT */}
+
+          <div className="mt-auto text-white">
 
             <h1
               className="
-                mt-5
-                text-[25px]
+                text-[38px]
+                leading-[1.15]
                 font-bold
-                text-[#183b5c]
+                mb-[18px]
+                max-md:text-[27px]
               "
             >
-              Create Your Account
+              Your Trusted Home
+              <br />
+              Repair Partner
             </h1>
 
             <p
               className="
-                mt-1.5
-                text-[14px]
-                text-[#7891a8]
+                text-[17px]
+                leading-[1.5]
+                mb-[28px]
+                max-md:text-[14px]
               "
             >
-              Register with RepairMithra
+              Connect with skilled professionals
+              <br />
+              for reliable and quality home
+              <br />
+              repair services.
             </p>
 
-          </div>
+            {/* FEATURES */}
 
-          {/* ==========================================
-              SERVER ERROR
-          ========================================== */}
+            <div
+              className="
+                flex
+                items-center
+                gap-6
+                max-md:gap-2
+              "
+            >
+
+              {/* TRUSTED */}
+
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-[10px]
+                  pr-[22px]
+                  border-r
+                  border-white/50
+                  max-md:pr-[10px]
+                "
+              >
+                <div
+                  className="
+                    w-12
+                    h-12
+                    rounded-full
+                    bg-white
+                    text-[#1478e8]
+                    flex
+                    items-center
+                    justify-center
+                    shrink-0
+                    max-md:w-[35px]
+                    max-md:h-[35px]
+                  "
+                >
+                  <FiCheckCircle size={23} />
+                </div>
+
+                <span
+                  className="
+                    text-[14px]
+                    font-semibold
+                    leading-[1.25]
+                    max-md:text-[10px]
+                  "
+                >
+                  Trusted
+                  <br />
+                  Professionals
+                </span>
+              </div>
+
+              {/* QUALITY */}
+
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-[10px]
+                  pr-[22px]
+                  border-r
+                  border-white/50
+                  max-md:pr-[10px]
+                "
+              >
+                <div
+                  className="
+                    w-12
+                    h-12
+                    rounded-full
+                    bg-white
+                    text-[#1478e8]
+                    flex
+                    items-center
+                    justify-center
+                    shrink-0
+                    max-md:w-[35px]
+                    max-md:h-[35px]
+                  "
+                >
+                  <FiStar size={23} />
+                </div>
+
+                <span
+                  className="
+                    text-[14px]
+                    font-semibold
+                    leading-[1.25]
+                    max-md:text-[10px]
+                  "
+                >
+                  Quality
+                  <br />
+                  Services
+                </span>
+              </div>
+
+              {/* EASY BOOKING */}
+
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-[10px]
+                "
+              >
+                <div
+                  className="
+                    w-12
+                    h-12
+                    rounded-full
+                    bg-white
+                    text-[#1478e8]
+                    flex
+                    items-center
+                    justify-center
+                    shrink-0
+                    max-md:w-[35px]
+                    max-md:h-[35px]
+                  "
+                >
+                  <FiCheckCircle size={23} />
+                </div>
+
+                <span
+                  className="
+                    text-[14px]
+                    font-semibold
+                    leading-[1.25]
+                    max-md:text-[10px]
+                  "
+                >
+                  Easy
+                  <br />
+                  Booking
+                </span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {/* ====================================
+            RIGHT SIDE
+        ==================================== */}
+
+        <div
+          className="
+            p-[48px_55px]
+            overflow-y-auto
+            max-md:p-[30px_22px]
+          "
+        >
+
+          {/* TITLE */}
+
+          <h2
+            className="
+              text-[#10477e]
+              text-[42px]
+              leading-[1.1]
+              font-bold
+              max-md:text-[32px]
+            "
+          >
+            Create Account
+          </h2>
+
+          <p
+            className="
+              text-[#6d8baa]
+              text-[17px]
+              mt-3
+              mb-[26px]
+              max-md:text-[14px]
+            "
+          >
+            Join RepairMithra and get started today
+          </p>
+
+          {/* SERVER ERROR */}
 
           {serverError && (
             <div
               className="
                 mb-5
-                rounded-[9px]
+                flex
+                items-start
+                gap-2
+                rounded-lg
+                bg-red-50
                 border
                 border-red-200
-                bg-red-50
                 px-4
                 py-3
-                text-[13px]
-                text-red-600
+                text-sm
+                text-red-700
               "
             >
-              {serverError}
+              <FiAlertCircle
+                className="mt-0.5 shrink-0"
+                size={17}
+              />
+
+              <span>
+                {serverError}
+              </span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
+          {/* ==================================
+              FORM
+          ================================== */}
 
-            {/* ========================================
-                FULL NAME
-            ======================================== */}
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+          >
+
+            {/* FULL NAME */}
 
             <div className="mb-[15px]">
 
@@ -742,7 +928,6 @@ function Registration() {
                     absolute
                     left-3
                     top-1/2
-                    z-10
                     -translate-y-1/2
                     text-[#6685a5]
                   "
@@ -771,77 +956,34 @@ function Registration() {
 
             </div>
 
-            {/* ========================================
-                EMAIL + SEND OTP
-            ======================================== */}
+            {/* EMAIL */}
 
             <div className="mb-[15px]">
 
-              <div className="flex items-start gap-2">
+              <div className="relative">
 
-                {/* EMAIL */}
-
-                <div className="relative flex-1">
-
-                  <FiMail
-                    className="
-                      absolute
-                      left-3
-                      top-1/2
-                      z-10
-                      -translate-y-1/2
-                      text-[#6685a5]
-                    "
-                    size={20}
-                  />
-
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Email Address *"
-                    autoComplete="email"
-                    className={`${inputClass(
-                      "email"
-                    )} pl-[52px]`}
-                  />
-
-                </div>
-
-                {/* SMALL SEND OTP */}
-
-                <button
-                  type="button"
-                  onClick={sendVerificationCode}
-                  disabled={
-                    isSendingCode ||
-                    resendCountdown > 0 ||
-                    !isValidEmail(
-                      formData.email
-                    )
-                  }
+                <FiMail
                   className="
-                    h-[54px]
-                    rounded-[10px]
-                    bg-[#1478e8]
-                    px-4
-                    text-[13px]
-                    font-semibold
-                    whitespace-nowrap
-                    text-white
-                    transition
-                    hover:bg-[#0d69d0]
-                    disabled:cursor-not-allowed
-                    disabled:bg-[#b8cce0]
+                    absolute
+                    left-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-[#6685a5]
                   "
-                >
-                  {isSendingCode
-                    ? "Sending..."
-                    : codeSent
-                    ? "Sent"
-                    : "Send OTP"}
-                </button>
+                  size={20}
+                />
+
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Email Address *"
+                  autoComplete="email"
+                  className={`${inputClass(
+                    "email"
+                  )} pl-[52px]`}
+                />
 
               </div>
 
@@ -853,55 +995,50 @@ function Registration() {
 
             </div>
 
-            {/* ========================================
-                OTP SECTION
-            ======================================== */}
+            {/* EMAIL VERIFICATION CODE */}
 
-            {codeSent && (
-              <div className="mb-[18px]">
+            <div className="mb-[15px]">
 
-                {/* OTP INPUT */}
+              <div className="relative">
 
-                <div className="relative">
+                <FiShield
+                  className="
+                    absolute
+                    left-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-[#6685a5]
+                    z-10
+                  "
+                  size={20}
+                />
 
-                  <FiShield
-                    className="
-                      absolute
-                      left-3
-                      top-1/2
-                      z-10
-                      -translate-y-1/2
-                      text-[#6685a5]
-                    "
-                    size={20}
-                  />
+                <input
+                  type="text"
+                  name="verificationCode"
+                  value={formData.verificationCode}
+                  onChange={(e) => {
+                    const value =
+                      e.target.value.replace(
+                        /\D/g,
+                        ""
+                      );
 
-                  <input
-                    type="text"
-                    name="verificationCode"
-                    value={
-                      formData.verificationCode
-                    }
-                    onChange={(e) => {
-                      const value =
-                        e.target.value.replace(
-                          /\D/g,
-                          ""
-                        );
+                    if (value.length <= 6) {
+                      setFormData(
+                        (previous) => ({
+                          ...previous,
+                          verificationCode:
+                            value,
+                        })
+                      );
+
+                      // If the OTP changes, it must be verified again
+                      setOtpVerified(false);
 
                       if (
-                        value.length <= 6
+                        errors.verificationCode
                       ) {
-                        setFormData(
-                          (previous) => ({
-                            ...previous,
-                            verificationCode:
-                              value,
-                          })
-                        );
-
-                        setOtpVerified(false);
-
                         setErrors(
                           (previous) => ({
                             ...previous,
@@ -910,112 +1047,124 @@ function Registration() {
                           })
                         );
                       }
-                    }}
-                    placeholder="Enter 6-digit OTP *"
-                    maxLength={6}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    className={`${inputClass(
-                      "verificationCode"
-                    )} pl-[52px]`}
-                  />
 
-                </div>
+                      if (serverError) {
+                        setServerError("");
+                      }
+                    }
+                  }}
+                  placeholder="Email Verification Code *"
+                  maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  disabled={
+                    otpVerified ||
+                    isVerifyingOtp
+                  }
+                  className={`${inputClass(
+                    "verificationCode"
+                  )} pl-[52px] pr-[115px]`}
+                />
 
-                {/* VERIFY BUTTON */}
+                {/* SEND / RESEND BUTTON */}
 
                 <button
-  type="button"
-  onClick={sendVerificationCode}
-  disabled={isSendingCode || otpVerified}
->
-  {otpVerified
-    ? "Email Verified"
-    : isSendingCode
-    ? "Sending..."
-    : "Send OTP"}
-</button>
-
-                {/* OTP ERROR */}
-
-                {errors.verificationCode && (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {
-                      errors.verificationCode
+                  type="button"
+                  onClick={
+                    sendVerificationCode
+                  }
+                  disabled={
+                    isSendingCode ||
+                    resendCountdown > 0 ||
+                    otpVerified
+                  }
+                  className={`
+                    absolute
+                    right-2
+                    top-1/2
+                    -translate-y-1/2
+                    font-bold
+                    text-xs
+                    rounded-[7px]
+                    px-3
+                    py-2
+                    transition
+                    ${
+                      isSendingCode ||
+                      resendCountdown > 0 ||
+                      otpVerified
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-[#e9f3ff] text-[#1478e8] hover:bg-[#d9ebff]"
                     }
+                  `}
+                >
+                  {otpVerified
+                    ? "Verified"
+                    : isSendingCode
+                    ? "Sending..."
+                    : resendCountdown > 0
+                    ? `${resendCountdown}s`
+                    : codeSent
+                    ? "Resend"
+                    : "Send Code"}
+                </button>
+
+              </div>
+
+              {errors.verificationCode && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.verificationCode}
+                </p>
+              )}
+
+              {codeSent &&
+                !otpVerified &&
+                !errors.verificationCode && (
+                  <p className="mt-1.5 text-xs text-green-600">
+                    Verification code sent to your email.
                   </p>
                 )}
 
-                {/* OTP SUCCESS */}
+              {/* VERIFY OTP */}
 
-                {otpVerified && (
-                  <div
-                    className="
-                      mt-2
-                      flex
-                      items-center
-                      gap-1.5
-                      text-xs
-                      text-green-600
-                    "
-                  >
-                    <FiCheckCircle
-                      size={14}
-                    />
+              {codeSent && !otpVerified && (
+                <button
+                  type="button"
+                  onClick={verifyOtp}
+                  disabled={
+                    isVerifyingOtp ||
+                    formData.verificationCode.length !== 6
+                  }
+                  className="
+                    w-full
+                    h-[46px]
+                    mt-3
+                    rounded-[10px]
+                    bg-[#1478e8]
+                    text-white
+                    font-bold
+                    text-[14px]
+                    hover:bg-[#0d69d0]
+                    disabled:bg-[#8db8e2]
+                    disabled:cursor-not-allowed
+                    transition
+                  "
+                >
+                  {isVerifyingOtp
+                    ? "Verifying OTP..."
+                    : "Verify OTP"}
+                </button>
+              )}
 
-                    <span>
-                      Email verified successfully
-                    </span>
-                  </div>
-                )}
+              {otpVerified && (
+                <p className="mt-2 text-sm text-green-600 font-semibold">
+                  ✓ Email verified successfully
+                </p>
+              )}
 
-                {/* RESEND */}
+            </div>
 
-                {!otpVerified && (
-                  <div className="mt-2">
-
-                    {resendCountdown > 0 ? (
-                      <span
-                        className="
-                          text-[13px]
-                          text-[#7891a8]
-                        "
-                      >
-                        Resend OTP in{" "}
-                        <span className="font-semibold text-[#1478e8]">
-                          {resendCountdown}s
-                        </span>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={
-                          sendVerificationCode
-                        }
-                        disabled={
-                          isSendingCode
-                        }
-                        className="
-                          text-[13px]
-                          font-semibold
-                          text-[#1478e8]
-                          hover:underline
-                          disabled:text-gray-400
-                        "
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-
-                  </div>
-                )}
-
-              </div>
-            )}
-
-            {/* ========================================
-                PHONE
-            ======================================== */}
+            {/* PHONE */}
 
             <div className="mb-[15px]">
 
@@ -1026,12 +1175,29 @@ function Registration() {
                     absolute
                     left-3
                     top-1/2
-                    z-10
                     -translate-y-1/2
                     text-[#6685a5]
+                    z-10
                   "
                   size={20}
                 />
+
+                <span
+                  className="
+                    absolute
+                    left-[52px]
+                    top-1/2
+                    -translate-y-1/2
+                    text-[15px]
+                    text-[#426887]
+                    pr-[10px]
+                    border-r
+                    border-[#d8e3ee]
+                    z-10
+                  "
+                >
+                  +91
+                </span>
 
                 <input
                   type="tel"
@@ -1044,9 +1210,7 @@ function Registration() {
                         ""
                       );
 
-                    if (
-                      value.length <= 10
-                    ) {
+                    if (value.length <= 10) {
                       setFormData(
                         (previous) => ({
                           ...previous,
@@ -1070,7 +1234,7 @@ function Registration() {
                   autoComplete="tel"
                   className={`${inputClass(
                     "phone"
-                  )} pl-[52px]`}
+                  )} pl-[105px]`}
                 />
 
               </div>
@@ -1083,9 +1247,7 @@ function Registration() {
 
             </div>
 
-            {/* ========================================
-                ADDRESS
-            ======================================== */}
+            {/* ADDRESS */}
 
             <div className="mb-[15px]">
 
@@ -1095,39 +1257,23 @@ function Registration() {
                   className="
                     absolute
                     left-3
-                    top-5
-                    z-10
+                    top-1/2
+                    -translate-y-1/2
                     text-[#6685a5]
                   "
                   size={20}
                 />
 
-                <textarea
+                <input
+                  type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
                   placeholder="Address *"
-                  rows={3}
                   autoComplete="street-address"
-                  className={`
-                    w-full
-                    rounded-[10px]
-                    border
-                    bg-white
-                    px-3
-                    py-4
-                    pl-[52px]
-                    text-[15px]
-                    text-[#315d85]
-                    placeholder:text-[#88a2bd]
-                    outline-none
-                    transition
-                    ${
-                      errors.address
-                        ? "border-red-400"
-                        : "border-[#d7e5f2] focus:border-[#1478e8] focus:ring-2 focus:ring-[#1478e8]/10"
-                    }
-                  `}
+                  className={`${inputClass(
+                    "address"
+                  )} pl-[52px]`}
                 />
 
               </div>
@@ -1140,9 +1286,7 @@ function Registration() {
 
             </div>
 
-            {/* ========================================
-                PINCODE
-            ======================================== */}
+            {/* PINCODE */}
 
             <div className="mb-[15px]">
 
@@ -1153,7 +1297,6 @@ function Registration() {
                     absolute
                     left-3
                     top-1/2
-                    z-10
                     -translate-y-1/2
                     text-[#6685a5]
                   "
@@ -1171,9 +1314,7 @@ function Registration() {
                         ""
                       );
 
-                    if (
-                      value.length <= 6
-                    ) {
+                    if (value.length <= 6) {
                       setFormData(
                         (previous) => ({
                           ...previous,
@@ -1210,9 +1351,7 @@ function Registration() {
 
             </div>
 
-            {/* ========================================
-                PASSWORD
-            ======================================== */}
+            {/* PASSWORD */}
 
             <div className="mb-[15px]">
 
@@ -1223,7 +1362,6 @@ function Registration() {
                     absolute
                     left-3
                     top-1/2
-                    z-10
                     -translate-y-1/2
                     text-[#6685a5]
                   "
@@ -1243,15 +1381,14 @@ function Registration() {
                   autoComplete="new-password"
                   className={`${inputClass(
                     "password"
-                  )} pl-[52px] pr-[52px]`}
+                  )} pl-[52px] pr-[50px]`}
                 />
 
                 <button
                   type="button"
                   onClick={() =>
                     setShowPassword(
-                      (previous) =>
-                        !previous
+                      (value) => !value
                     )
                   }
                   className="
@@ -1259,8 +1396,8 @@ function Registration() {
                     right-3
                     top-1/2
                     -translate-y-1/2
-                    text-[#6685a5]
-                    hover:text-[#1478e8]
+                    bg-transparent
+                    text-[#6c8aa7]
                   "
                   aria-label={
                     showPassword
@@ -1283,13 +1420,16 @@ function Registration() {
                 </p>
               )}
 
+              <p className="mt-1.5 text-[11px] text-[#7891a8]">
+                Minimum 8 characters, including
+                1 number and 1 special character.
+              </p>
+
             </div>
 
-            {/* ========================================
-                CONFIRM PASSWORD
-            ======================================== */}
+            {/* CONFIRM PASSWORD */}
 
-            <div className="mb-[22px]">
+            <div className="mb-[15px]">
 
               <div className="relative">
 
@@ -1298,7 +1438,6 @@ function Registration() {
                     absolute
                     left-3
                     top-1/2
-                    z-10
                     -translate-y-1/2
                     text-[#6685a5]
                   "
@@ -1320,15 +1459,14 @@ function Registration() {
                   autoComplete="new-password"
                   className={`${inputClass(
                     "confirmPassword"
-                  )} pl-[52px] pr-[52px]`}
+                  )} pl-[52px] pr-[50px]`}
                 />
 
                 <button
                   type="button"
                   onClick={() =>
                     setShowConfirmPassword(
-                      (previous) =>
-                        !previous
+                      (value) => !value
                     )
                   }
                   className="
@@ -1336,8 +1474,8 @@ function Registration() {
                     right-3
                     top-1/2
                     -translate-y-1/2
-                    text-[#6685a5]
-                    hover:text-[#1478e8]
+                    bg-transparent
+                    text-[#6c8aa7]
                   "
                   aria-label={
                     showConfirmPassword
@@ -1356,42 +1494,34 @@ function Registration() {
 
               {errors.confirmPassword && (
                 <p className="mt-1.5 text-xs text-red-600">
-                  {
-                    errors.confirmPassword
-                  }
+                  {errors.confirmPassword}
                 </p>
               )}
 
             </div>
 
-            {/* ========================================
-                CREATE ACCOUNT
-            ======================================== */}
+            {/* CREATE ACCOUNT */}
 
             <button
               type="submit"
-              disabled={
-                isLoading ||
-                !otpVerified
-              }
+              disabled={isLoading || !otpVerified}
               className="
-                flex
-                h-[54px]
                 w-full
+                h-[54px]
+                rounded-[10px]
+                bg-[#1478e8]
+                text-white
+                font-bold
+                text-[15px]
+                flex
                 items-center
                 justify-center
                 gap-2
-                rounded-[10px]
-                bg-[#1478e8]
-                text-[15px]
-                font-bold
-                text-white
                 shadow-[0_8px_18px_rgba(20,120,232,0.25)]
-                transition
                 hover:bg-[#0d69d0]
+                disabled:bg-[#8db8e2]
                 disabled:cursor-not-allowed
-                disabled:bg-[#b8cce0]
-                disabled:text-[#6f879e]
+                transition
               "
             >
               {isLoading
@@ -1401,14 +1531,12 @@ function Registration() {
 
           </form>
 
-          {/* ==========================================
-              LOGIN
-          ========================================== */}
+          {/* LOGIN */}
 
           <div
             className="
-              mt-6
               text-center
+              mt-6
               text-[14px]
               text-[#7891a8]
             "
@@ -1418,8 +1546,8 @@ function Registration() {
             <Link
               to="/login"
               className="
-                font-semibold
                 text-[#1478e8]
+                font-bold
                 hover:underline
               "
             >
@@ -1428,9 +1556,7 @@ function Registration() {
           </div>
 
         </div>
-
       </div>
-
     </div>
   );
 }

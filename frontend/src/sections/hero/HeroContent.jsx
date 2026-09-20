@@ -17,7 +17,7 @@ function HeroContent() {
         </div>
 
         <span className="text-sm font-semibold text-slate-700">
-          Trusted by 10,000+ Customers
+          Trusted by 1000+ Customers
         </span>
 
       </div>

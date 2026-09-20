@@ -6,19 +6,47 @@ import Footer from "./sections/footer/Footer";
 import Home from "./pages/home/Home";
 import Login from "./pages/login/Login";
 import Registration from "./pages/register/Registration";
+import Profile from "./pages/profile/Profile";
+
 function App() {
   return (
-    <>
-      <Navbar />
+    <Routes>
+      {/* Home */}
+      <Route
+        path="/"
+        element={
+          <>
+            <Navbar />
+            <Home />
+            <Footer />
+          </>
+        }
+      />
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Registration />} />
-      </Routes>
+      {/* Login - Standalone */}
+      <Route
+        path="/login"
+        element={<Login />}
+      />
 
-      <Footer />
-    </>
+      {/* Registration - Standalone */}
+      <Route
+        path="/register"
+        element={<Registration />}
+      />
+
+      {/* Profile */}
+      <Route
+        path="/profile"
+        element={
+          <>
+            <Navbar />
+            <Profile />
+            <Footer />
+          </>
+        }
+      />
+    </Routes>
   );
 }
 

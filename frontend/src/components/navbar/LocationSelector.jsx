@@ -95,8 +95,10 @@ function LocationSelector({ className = "", selected, onSelect }) {
 
   // Keep the input showing the confirmed selection whenever it's not being edited
   useEffect(() => {
-    if (!open) setQuery(selected || "");
-  }, [selected, open]);
+  if (!open && selected) {
+    setQuery(selected);
+  }
+}, [selected, open]);
 
   const filtered =
     query.trim() === ""

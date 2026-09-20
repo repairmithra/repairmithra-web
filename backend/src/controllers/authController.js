@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import bcrypt from "bcrypt";
+import generateToken from "../utils/generateToken.js";
 
 import User from "../models/User.js";
 import EmailVerification from "../models/EmailVerification.js";
-
 
 // ======================================================
 // SEND VERIFICATION CODE
@@ -38,6 +38,7 @@ export const sendVerificationCode = async (req, res) => {
 
     if (existingVerification) {
       const now = new Date();
+
       const timeSinceLastSent =
         now.getTime() -
         new Date(existingVerification.lastSentAt).getTime();
@@ -167,7 +168,6 @@ export const sendVerificationCode = async (req, res) => {
   }
 };
 
-
 // ======================================================
 // VERIFY EMAIL VERIFICATION CODE
 // ======================================================
@@ -268,7 +268,6 @@ export const verifyVerificationCode = async (
     });
   }
 };
-
 
 // ======================================================
 // REGISTER USER
@@ -472,7 +471,6 @@ export const registerUser = async (req, res) => {
   }
 };
 
-
 // ======================================================
 // LOGIN USER
 // ======================================================
@@ -516,12 +514,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    // Import your existing token generator
-    // Make sure this path matches your project.
-    const { generateToken } = await import(
-      "../utils/generateToken.js"
-    );
-
+    // Generate JWT token
     const token = generateToken(
       user._id,
       user.role
@@ -554,7 +547,6 @@ export const loginUser = async (req, res) => {
     });
   }
 };
-
 
 // ======================================================
 // GET PROFILE

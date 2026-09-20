@@ -6,6 +6,8 @@ import ac from "../../assets/images/services/ac.jpg";
 import plumbing from "../../assets/images/services/plumbing.jpg";
 import electrical from "../../assets/images/services/electrical.jpg";
 import cleaning from "../../assets/images/services/cleaning.jpg";
+import civilRepair from "../../assets/images/services/civil-repair.jpg";
+import wallPainting from "../../assets/images/services/wall-painting.jpg";
 
 import { FiArrowRight } from "react-icons/fi";
 
@@ -47,6 +49,18 @@ function Services() {
       description:
         "Professional home deep cleaning for kitchens, bathrooms and complete homes.",
     },
+    {
+  image: civilRepair,
+  title: "Civil Repair",
+  description:
+    "Wall repairs, tile work, plastering, masonry work and other home civil maintenance services.",
+},
+{
+  image: wallPainting,
+  title: "Wall Painting",
+  description:
+    "Professional interior and exterior wall painting, touch-ups and complete painting services.",
+},
   ];
 
   return (
