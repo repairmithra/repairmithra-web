@@ -1,164 +1,159 @@
 import crypto from "crypto";
-import dns from "dns/promises";
+import bcrypt from "bcrypt";
 
 import User from "../models/User.js";
 import EmailVerification from "../models/EmailVerification.js";
-import bcrypt from "bcrypt";
-import generateToken from "../utils/generateToken.js";
-import { sendVerificationEmail } from "../services/emailService.js";
 
 
 // ======================================================
-// SEND EMAIL VERIFICATION CODE
+// SEND VERIFICATION CODE
 // ======================================================
 
 export const sendVerificationCode = async (req, res) => {
   try {
     let { email } = req.body;
 
-    // ------------------------------------------
-    // Check email exists
-    // ------------------------------------------
+    email = email?.trim().toLowerCase();
 
-    if (!email || typeof email !== "string") {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Email address is required",
+        message: "Email is required",
       });
     }
 
-    // Normalize email
-    email = email.trim().toLowerCase();
-
-    // ------------------------------------------
-    // Validate email format
-    // ------------------------------------------
-
-    const emailRegex =
-      /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid email address",
-      });
-    }
-
-    // ------------------------------------------
-    // Check if email already registered
-    // ------------------------------------------
-
+    // Check if email is already registered
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "An account with this email already exists",
+        message: "Email is already registered",
       });
     }
 
-    // ------------------------------------------
-    // Check email domain
-    // ------------------------------------------
-
-    const domain = email.split("@")[1];
-
-    try {
-      const mxRecords = await dns.resolveMx(domain);
-
-      if (!mxRecords || mxRecords.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Email domain cannot receive emails",
-        });
-      }
-    } catch (dnsError) {
-      return res.status(400).json({
-        success: false,
-        message: "Please use a valid email domain",
-      });
-    }
-
-    // ------------------------------------------
-    // Check previous OTP request
-    // ------------------------------------------
-
-    const existingVerification = await EmailVerification.findOne({
-      email,
-    });
+    // Check existing OTP
+    const existingVerification =
+      await EmailVerification.findOne({ email });
 
     if (existingVerification) {
-      const secondsSinceLastSent =
-        (Date.now() - existingVerification.lastSentAt.getTime()) / 1000;
+      const now = new Date();
+      const timeSinceLastSent =
+        now.getTime() -
+        new Date(existingVerification.lastSentAt).getTime();
 
-      // Allow one OTP every 60 seconds
-      if (secondsSinceLastSent < 60) {
+      const cooldown = 60 * 1000;
+
+      if (timeSinceLastSent < cooldown) {
         const remainingSeconds = Math.ceil(
-          60 - secondsSinceLastSent
+          (cooldown - timeSinceLastSent) / 1000
         );
 
         return res.status(429).json({
           success: false,
-          message: `Please wait ${remainingSeconds} seconds before requesting another code`,
+          message: `Please wait ${remainingSeconds} seconds before requesting another code.`,
         });
       }
     }
 
-    // ------------------------------------------
-    // Generate secure 6-digit OTP
-    // ------------------------------------------
+    // Generate 6 digit OTP
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
 
-    const otp = crypto
-      .randomInt(100000, 1000000)
-      .toString();
-
-    // ------------------------------------------
-    // Hash OTP before storing
-    // ------------------------------------------
-
+    // Hash OTP
     const otpHash = crypto
       .createHash("sha256")
-      .update(otp)
+      .update(verificationCode)
       .digest("hex");
 
-    // ------------------------------------------
     // OTP expires after 10 minutes
-    // ------------------------------------------
-
     const expiresAt = new Date(
       Date.now() + 10 * 60 * 1000
     );
 
-    // ------------------------------------------
-    // Save OTP
-    // ------------------------------------------
+    if (existingVerification) {
+      existingVerification.otpHash = otpHash;
+      existingVerification.expiresAt = expiresAt;
+      existingVerification.attempts = 0;
+      existingVerification.lastSentAt = new Date();
 
-    await EmailVerification.findOneAndUpdate(
-      { email },
-      {
+      await existingVerification.save();
+    } else {
+      await EmailVerification.create({
         email,
         otpHash,
         expiresAt,
         attempts: 0,
         lastSentAt: new Date(),
-      },
+      });
+    }
+
+    // --------------------------------------------------
+    // SEND EMAIL
+    // --------------------------------------------------
+
+    const resendResponse = await fetch(
+      "https://api.resend.com/emails",
       {
-        upsert: true,
-        new: true,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from:
+            process.env.RESEND_FROM_EMAIL ||
+            "RepairMithra <noreply@repairmithra.com>",
+          to: [email],
+          subject: "RepairMithra Email Verification Code",
+          html: `
+            <div style="font-family: Arial, sans-serif;">
+              <h2>RepairMithra Email Verification</h2>
+
+              <p>Your verification code is:</p>
+
+              <h1
+                style="
+                  letter-spacing: 6px;
+                  font-size: 32px;
+                "
+              >
+                ${verificationCode}
+              </h1>
+
+              <p>
+                This code will expire in 10 minutes.
+              </p>
+
+              <p>
+                If you did not request this code,
+                you can ignore this email.
+              </p>
+            </div>
+          `,
+        }),
       }
     );
 
-    // ------------------------------------------
-    // Send email using Resend
-    // ------------------------------------------
+    const resendData = await resendResponse.json();
 
-    await sendVerificationEmail(email, otp);
+    if (!resendResponse.ok) {
+      console.error(
+        "Resend email error:",
+        resendData
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to send verification code",
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Verification code sent to your email",
+      message: "Verification code sent successfully",
     });
-
   } catch (error) {
     console.error(
       "Send verification code error:",
@@ -174,177 +169,34 @@ export const sendVerificationCode = async (req, res) => {
 
 
 // ======================================================
-// REGISTER USER
+// VERIFY EMAIL VERIFICATION CODE
 // ======================================================
 
-export const registerUser = async (req, res) => {
+export const verifyVerificationCode = async (
+  req,
+  res
+) => {
   try {
-    let {
-      fullName,
-      email,
-      phone,
-      address,
-      pincode,
-      password,
-      verificationCode,
-    } = req.body;
+    let { email, verificationCode } = req.body;
 
-    // ------------------------------------------
-    // Normalize values
-    // ------------------------------------------
-
-    fullName = fullName?.trim();
     email = email?.trim().toLowerCase();
-    phone = phone?.trim();
-    address = address?.trim();
-    pincode = pincode?.trim();
     verificationCode = verificationCode?.trim();
 
-    // ------------------------------------------
-    // Required fields
-    // ------------------------------------------
-
-    if (
-      !fullName ||
-      !email ||
-      !phone ||
-      !address ||
-      !pincode ||
-      !password ||
-      !verificationCode
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "All registration fields are required",
-      });
-    }
-
-    // ------------------------------------------
-    // Validate name
-    // ------------------------------------------
-
-    const nameRegex =
-      /^[\p{L}]+(?:[ '\-][\p{L}]+)*$/u;
-
-    if (
-      fullName.length < 2 ||
-      fullName.length > 60 ||
-      !nameRegex.test(fullName)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid full name",
-      });
-    }
-
-    // ------------------------------------------
-    // Validate email
-    // ------------------------------------------
-
-    const emailRegex =
-      /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid email address",
-      });
-    }
-
-    // ------------------------------------------
-    // Validate phone
-    // Must start with 6-9
-    // Exactly 10 digits
-    // ------------------------------------------
-
-    const phoneRegex = /^[6-9][0-9]{9}$/;
-
-    if (!phoneRegex.test(phone)) {
+    if (!email || !verificationCode) {
       return res.status(400).json({
         success: false,
         message:
-          "Phone number must be exactly 10 digits and start with 6, 7, 8, or 9",
+          "Email and verification code are required",
       });
     }
 
-    // ------------------------------------------
-    // Validate pincode
-    // ------------------------------------------
-
-    const pincodeRegex = /^[0-9]{6}$/;
-
-    if (!pincodeRegex.test(pincode)) {
-      return res.status(400).json({
-        success: false,
-        message: "Pincode must be exactly 6 digits",
-      });
-    }
-
-    // ------------------------------------------
-    // Validate password
-    // Minimum 8 characters
-    // At least one number
-    // At least one special character
-    // ------------------------------------------
-
-    if (password.length < 8) {
+    if (!/^\d{6}$/.test(verificationCode)) {
       return res.status(400).json({
         success: false,
         message:
-          "Password must contain at least 8 characters",
+          "Verification code must be 6 digits",
       });
     }
-
-    if (!/[0-9]/.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must contain at least one number",
-      });
-    }
-
-    if (!/[^A-Za-z0-9]/.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must contain at least one special character",
-      });
-    }
-
-    // ------------------------------------------
-    // Validate verification code
-    // ------------------------------------------
-
-    if (!/^[0-9]{6}$/.test(verificationCode)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Verification code must be exactly 6 digits",
-      });
-    }
-
-    // ------------------------------------------
-    // Check existing user
-    // ------------------------------------------
-
-    const existingUser = await User.findOne({
-      $or: [
-        { email },
-        { phone },
-      ],
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "An account with this email or phone number already exists",
-      });
-    }
-
-    // ------------------------------------------
-    // Find OTP record
-    // ------------------------------------------
 
     const verification =
       await EmailVerification.findOne({ email });
@@ -353,59 +205,44 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Verification code not found. Please request a new code",
+          "Verification code not found. Please request a new code.",
       });
     }
 
-    // ------------------------------------------
-    // Check OTP expiry
-    // ------------------------------------------
-
     if (verification.expiresAt < new Date()) {
       await EmailVerification.deleteOne({
-        email,
+        _id: verification._id,
       });
 
       return res.status(400).json({
         success: false,
         message:
-          "Verification code has expired. Please request a new code",
+          "Verification code has expired. Please request a new code.",
       });
     }
 
-    // ------------------------------------------
-    // Limit OTP attempts
-    // ------------------------------------------
-
     if (verification.attempts >= 5) {
       await EmailVerification.deleteOne({
-        email,
+        _id: verification._id,
       });
 
       return res.status(429).json({
         success: false,
         message:
-          "Too many incorrect attempts. Please request a new code",
+          "Too many incorrect attempts. Please request a new code.",
       });
     }
-
-    // ------------------------------------------
-    // Hash submitted OTP
-    // ------------------------------------------
 
     const submittedOtpHash = crypto
       .createHash("sha256")
       .update(verificationCode)
       .digest("hex");
 
-    // ------------------------------------------
-    // Compare OTP
-    // ------------------------------------------
-
     if (
       submittedOtpHash !== verification.otpHash
     ) {
       verification.attempts += 1;
+
       await verification.save();
 
       return res.status(400).json({
@@ -414,17 +251,184 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // ------------------------------------------
+    return res.status(200).json({
+      success: true,
+      message: "Email verified successfully",
+    });
+  } catch (error) {
+    console.error(
+      "Verify verification code error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to verify verification code",
+    });
+  }
+};
+
+
+// ======================================================
+// REGISTER USER
+// ======================================================
+
+export const registerUser = async (req, res) => {
+  try {
+    let {
+      fullName,
+      email,
+      verificationCode,
+      phone,
+      address,
+      pincode,
+      password,
+    } = req.body;
+
+    fullName = fullName?.trim();
+    email = email?.trim().toLowerCase();
+    verificationCode =
+      verificationCode?.trim();
+    phone = phone?.trim();
+    address = address?.trim();
+    pincode = pincode?.trim();
+
+    if (
+      !fullName ||
+      !email ||
+      !verificationCode ||
+      !phone ||
+      !address ||
+      !pincode ||
+      !password
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    if (!/^\d{6}$/.test(verificationCode)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification code must be 6 digits",
+      });
+    }
+
+    if (!/^[6-9][0-9]{9}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please enter a valid Indian mobile number",
+      });
+    }
+
+    if (!/^[0-9]{6}$/.test(pincode)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please enter a valid 6 digit pincode",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters",
+      });
+    }
+
+    // Check existing user
+    const existingUser =
+      await User.findOne({
+        $or: [
+          { email },
+          { phone },
+        ],
+      });
+
+    if (existingUser) {
+      if (existingUser.email === email) {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already registered",
+        });
+      }
+
+      if (existingUser.phone === phone) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Phone number is already registered",
+        });
+      }
+    }
+
+    // Find OTP
+    const verification =
+      await EmailVerification.findOne({ email });
+
+    if (!verification) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification code not found. Please request a new code.",
+      });
+    }
+
+    // Check expiry
+    if (verification.expiresAt < new Date()) {
+      await EmailVerification.deleteOne({
+        _id: verification._id,
+      });
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification code has expired. Please request a new code.",
+      });
+    }
+
+    // Check attempts
+    if (verification.attempts >= 5) {
+      await EmailVerification.deleteOne({
+        _id: verification._id,
+      });
+
+      return res.status(429).json({
+        success: false,
+        message:
+          "Too many incorrect attempts. Please request a new code.",
+      });
+    }
+
+    // Verify OTP again on server
+    const submittedOtpHash = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
+    if (
+      submittedOtpHash !== verification.otpHash
+    ) {
+      verification.attempts += 1;
+
+      await verification.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code",
+      });
+    }
+
     // Hash password
-    // ------------------------------------------
-
     const hashedPassword =
-      await bcrypt.hash(password, 12);
+      await bcrypt.hash(password, 10);
 
-    // ------------------------------------------
     // Create user
-    // ------------------------------------------
-
     const user = await User.create({
       fullName,
       email,
@@ -436,22 +440,14 @@ export const registerUser = async (req, res) => {
       isVerified: true,
     });
 
-    // ------------------------------------------
     // Delete OTP after successful registration
-    // ------------------------------------------
-
     await EmailVerification.deleteOne({
-      email,
+      _id: verification._id,
     });
-
-    // ------------------------------------------
-    // Response
-    // ------------------------------------------
 
     return res.status(201).json({
       success: true,
-      message:
-        "Account created successfully",
+      message: "Account created successfully",
       data: {
         id: user._id,
         fullName: user.fullName,
@@ -463,7 +459,6 @@ export const registerUser = async (req, res) => {
         isVerified: user.isVerified,
       },
     });
-
   } catch (error) {
     console.error(
       "Register user error:",
@@ -496,9 +491,8 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      email,
-    });
+    const user =
+      await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({
@@ -522,6 +516,12 @@ export const loginUser = async (req, res) => {
       });
     }
 
+    // Import your existing token generator
+    // Make sure this path matches your project.
+    const { generateToken } = await import(
+      "../utils/generateToken.js"
+    );
+
     const token = generateToken(
       user._id,
       user.role
@@ -542,7 +542,6 @@ export const loginUser = async (req, res) => {
         isVerified: user.isVerified,
       },
     });
-
   } catch (error) {
     console.error(
       "Login error:",
@@ -558,12 +557,35 @@ export const loginUser = async (req, res) => {
 
 
 // ======================================================
-// GET LOGGED-IN USER PROFILE
+// GET PROFILE
 // ======================================================
 
 export const getProfile = async (req, res) => {
-  return res.status(200).json({
-    success: true,
-    data: req.user,
-  });
+  try {
+    const user =
+      await User.findById(req.user._id)
+        .select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    console.error(
+      "Get profile error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to get profile",
+    });
+  }
 };
