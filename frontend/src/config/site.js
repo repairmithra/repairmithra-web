@@ -6,8 +6,3 @@ export const SUPPORT = {
   email: "service@repairmithra.com",
   hours: "Mon – Sat, 9 AM – 9 PM",
 };
-
-// While there is no real payment gateway connected, the payment page runs in
-// demo mode: nothing is charged and no card details are stored or sent.
-// Set this to false once a gateway (Razorpay, Cashfree, …) is wired in.
-export const DEMO_PAYMENTS = true;

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import {
   LuBellRing,
   LuCalendarClock,
@@ -7,6 +7,7 @@ import {
   LuHandCoins,
   LuHeadset,
   LuInfo,
+  LuLoader,
   LuPhone,
   LuPhoneCall,
   LuShieldCheck,
@@ -17,9 +18,16 @@ import {
 } from "react-icons/lu";
 
 import logo from "../../assets/images/repairmithra-logo.png";
+import {
+  BookingError,
+  BookingLoading,
+  BookingNotFound,
+} from "../../components/booking/BookingStates";
 import { SUPPORT } from "../../config/site";
-import { getBooking } from "../../utils/bookingStorage";
+import { useBooking } from "../../hooks/useBooking";
+import { useAuth } from "../../utils/auth";
 import { formatDate, formatINR } from "../../utils/format";
+import { payVisitFee } from "../../utils/payment";
 
 const NEXT_STEPS = [
   { icon: LuBellRing, text: "We will notify nearby technicians." },
@@ -36,22 +44,81 @@ const PROMISES = [
   { icon: LuSmile, label: "Happy Customers" },
 ];
 
-function BookingConfirmed() {
-  const { bookingId } = useParams();
-  const booking = getBooking(bookingId);
+// Shown when the booking exists but its visit fee has not been paid yet
+// (e.g. the payment window was closed, or the page was opened directly).
+function PaymentPending({ booking, onPaid }) {
+  const [paying, setPaying] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const handlePay = async () => {
+    setPaying(true);
+    setMessage("");
+
+    try {
+      await payVisitFee(booking.id);
+      onPaid();
+    } catch (err) {
+      if (err.code === "cancelled") {
+        setMessage("The payment window was closed. You haven't been charged.");
+      } else if (err.code === "verification") {
+        setMessage(
+          `We received your payment but couldn't confirm it yet. Please don't pay again — contact us on ${SUPPORT.phone} with reference ${booking.code}.`
+        );
+      } else {
+        setMessage(err.message || "Something went wrong. Please try again.");
+      }
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  return (
+    <section className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+      <h1 className="text-2xl font-bold text-slate-900">Payment pending</h1>
+      <p className="mt-3 text-slate-600">
+        Your {booking.serviceTitle} booking ({booking.code}) will be confirmed
+        as soon as the visit fee of {formatINR(booking.visitFee)} is paid.
+      </p>
+
+      {message && (
+        <p role="alert" className="mt-4 rounded-lg bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
+          {message}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={handlePay}
+        disabled={paying}
+        className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-wait disabled:opacity-80"
+      >
+        {paying && <LuLoader size={18} className="animate-spin" aria-hidden="true" />}
+        {paying ? "Processing payment..." : `Pay ${formatINR(booking.visitFee)}`}
+      </button>
+    </section>
+  );
+}
+
+function BookingConfirmedView({ bookingId }) {
+  const { booking, status, error, reload } = useBooking(bookingId);
   const headingRef = useRef(null);
+  const isConfirmed = booking?.paymentStatus === "paid";
 
   // Move focus to the confirmation heading so screen-reader users hear it
   useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
+    if (isConfirmed) headingRef.current?.focus();
+  }, [isConfirmed]);
 
-  if (!booking) {
+  if (status === "loading") return <BookingLoading />;
+  if (status === "notfound") return <BookingNotFound />;
+  if (status === "error") return <BookingError message={error?.message} onRetry={reload} />;
+
+  if (booking.status === "cancelled") {
     return (
       <section className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-        <h1 className="text-3xl font-bold text-slate-900">Booking not found</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Booking cancelled</h1>
         <p className="mt-3 max-w-md text-slate-600">
-          We couldn't find a booking with ID {bookingId} on this device.
+          Booking {booking.code} has been cancelled. Need help? Call {SUPPORT.phone}.
         </p>
         <Link
           to="/services"
@@ -63,14 +130,16 @@ function BookingConfirmed() {
     );
   }
 
+  if (!isConfirmed) return <PaymentPending booking={booking} onPaid={reload} />;
+
   const details = [
-    { label: "Booking ID", value: booking.id, strong: true },
+    { label: "Booking ID", value: booking.code, strong: true },
     { label: "Service", value: booking.serviceTitle, strong: true },
-    { label: "Visit Fee Paid", value: formatINR(booking.payment.amount), strong: true },
+    { label: "Visit Fee Paid", value: formatINR(booking.payment?.amount ?? booking.visitFee), strong: true },
     { label: "Date & Time", value: `${formatDate(booking.date)}, ${booking.time}` },
     {
       label: "Address",
-      value: `${booking.address}, ${booking.city} - ${booking.pincode}`,
+      value: [booking.address, booking.city].filter(Boolean).join(", ") + ` - ${booking.pincode}`,
     },
   ];
 
@@ -164,7 +233,7 @@ function BookingConfirmed() {
                   </p>
                   <a
                     href={`mailto:${SUPPORT.email}?subject=${encodeURIComponent(
-                      `Help with booking ${booking.id}`
+                      `Help with booking ${booking.code}`
                     )}`}
                     className="mt-3 inline-block rounded-lg border border-green-600 bg-white px-4 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-50"
                   >
@@ -217,6 +286,18 @@ function BookingConfirmed() {
       </div>
     </div>
   );
+}
+
+function BookingConfirmed() {
+  const { bookingId } = useParams();
+  const location = useLocation();
+  const { isLoggedIn } = useAuth();
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  return <BookingConfirmedView key={bookingId} bookingId={bookingId} />;
 }
 
 export default BookingConfirmed;

@@ -12,19 +12,19 @@ import FeatureCard from "./FeatureCard";
 function WhyChooseUs() {
   const stats = [
     {
-      number: "10,000+",
+      number: "1,000+",
       label: "Happy Customers",
     },
     {
-      number: "500+",
+      number: "100+",
       label: "Verified Technicians",
     },
     {
-      number: "15+",
+      number: "10+",
       label: "Services Offered",
     },
     {
-      number: "4.9★",
+      number: "4.5★",
       label: "Average Rating",
     },
   ];

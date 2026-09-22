@@ -3,10 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
-
-// Allow overriding the API base URL via VITE_API_URL for production builds.
-// In dev, requests to "/api/..." are proxied to the backend (see vite.config.js).
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { setSession } from "../../utils/auth";
+import { API_BASE } from "../../utils/api";
 
 function Login() {
   const navigate = useNavigate();
@@ -79,9 +77,8 @@ function Login() {
         throw new Error(data.message || "Invalid email or password");
       }
 
-      // Persist auth token + user for the rest of the app to use
-      localStorage.setItem("rm_token", data.token);
-      localStorage.setItem("rm_user", JSON.stringify(data.data));
+      // Save the session. The navbar etc. update straight away.
+      setSession(data.token, data.data);
 
       navigate(redirectTo, { replace: true });
     } catch (err) {

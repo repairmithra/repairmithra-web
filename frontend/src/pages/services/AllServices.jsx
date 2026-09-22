@@ -7,7 +7,7 @@ import {
   LuHeadset,
 } from "react-icons/lu";
 
-import { searchServices } from "../../data/servicesData";
+import { useServices } from "../../hooks/useServices";
 import { formatINR } from "../../utils/format";
 
 const TRUST_ITEMS = [
@@ -60,6 +60,7 @@ function HouseIllustration({ className = "" }) {
 
 function AllServices() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isLoading, error, reload, searchServices } = useServices();
 
   // The search text lives in the URL (?q=...) so the navbar search box and this
   // page share it, and a filtered view can be linked to.
@@ -139,7 +140,33 @@ function AllServices() {
           Choose from a wide range of home services
         </p>
 
-        {results.length > 0 ? (
+        {isLoading ? (
+          <ul className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Loading services">
+            {Array.from({ length: 8 }, (_, index) => (
+              <li
+                key={index}
+                aria-hidden="true"
+                className="h-44 animate-pulse rounded-2xl border border-slate-200 bg-white"
+              />
+            ))}
+          </ul>
+        ) : error ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+          >
+            <p className="font-semibold text-slate-900">
+              We couldn&apos;t load our services right now.
+            </p>
+            <p className="mt-1 text-sm text-slate-500">{error}</p>
+            <button
+              onClick={reload}
+              className="mt-5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Try again
+            </button>
+          </div>
+        ) : results.length > 0 ? (
           <ul className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {results.map((service) => {
               const Icon = service.icon;
@@ -148,19 +175,41 @@ function AllServices() {
                 <li key={service.slug}>
                   <Link
                     to={`/services/${service.slug}`}
-                    className="group flex h-full flex-col items-center rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm transition-colors hover:border-green-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+                    className="group flex h-full flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-center shadow-sm transition-colors hover:border-green-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
                   >
-                    <span
-                      className={`flex h-24 w-full items-center justify-center rounded-xl ${service.tone}`}
-                    >
-                      <Icon size={48} strokeWidth={1.5} aria-hidden="true" />
-                    </span>
+                    {service.image ? (
+                      <span className="relative h-24 w-full overflow-hidden bg-slate-100">
+                        {/* Soft blurred backdrop so the frame is always filled */}
+                        <img
+                          src={service.image}
+                          alt=""
+                          aria-hidden="true"
+                          className="absolute inset-0 h-full w-full scale-110 object-cover object-center blur-xl opacity-50"
+                        />
+                        {/* Full, uncropped image on top */}
+                        <img
+                          src={service.image}
+                          alt={service.title}
+                          className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                        <span className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      </span>
+                    ) : (
+                      <span
+                        className={`flex h-24 w-full items-center justify-center ${service.tone}`}
+                      >
+                        <Icon size={48} strokeWidth={1.5} aria-hidden="true" />
+                      </span>
+                    )}
 
-                    <span className="mt-4 text-sm font-semibold text-slate-900 sm:text-base">
-                      {service.title}
-                    </span>
-                    <span className="mt-1 text-xs text-slate-500">
-                      Visit fee {formatINR(service.visitFee)}
+                    <span className="flex flex-1 flex-col items-center p-4">
+                      <span className="text-sm font-semibold text-slate-900 sm:text-base">
+                        {service.title}
+                      </span>
+                      <span className="mt-1 text-xs text-slate-500">
+                        Visit fee {formatINR(service.visitFee)}
+                      </span>
                     </span>
                   </Link>
                 </li>

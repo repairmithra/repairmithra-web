@@ -12,9 +12,11 @@ import {
 
 import SearchBar from "./SearchBar";
 import LocationSelector, { LOCATIONS } from "./LocationSelector";
+import { useAuth } from "../../utils/auth";
 
 function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
   const [locationOpen, setLocationOpen] = useState(false);
 
   if (!open) return null;
@@ -104,7 +106,7 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
                     setLocationOpen(false);
                   }}
                   className={`flex items-center gap-3 ${
-                    selectedLocation === city ? "font-semibold text-blue-600" : ""
+                    selectedLocation === city ? "font-semibold text-sky-600" : ""
                   }`}
                 >
                   <FiMapPin />
@@ -122,11 +124,6 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
 
           <div className="pt-6 space-y-3">
 
-            <button className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-blue-600 py-3 text-blue-600 font-semibold hover:bg-blue-50 transition">
-              <FiBriefcase size={18} />
-              Join as Partner
-            </button>
-
             <button
               onClick={() => {
                 setOpen(false);
@@ -137,16 +134,37 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
               Book a Service
             </button>
 
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate("/login");
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-white font-semibold hover:bg-blue-700 transition"
-            >
-              <FiUser size={18} />
-              Login
-            </button>
+            {isLoggedIn ? (
+              /* Logout lives inside the Profile page, not here. */
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/profile");
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3 text-white font-semibold hover:bg-sky-700 transition"
+              >
+                <FiUser size={18} />
+                Profile
+              </button>
+            ) : (
+              <>
+                <button className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-sky-600 py-3 text-sky-600 font-semibold hover:bg-sky-50 transition">
+                  <FiBriefcase size={18} />
+                  Join as Partner
+                </button>
+
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/login");
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3 text-white font-semibold hover:bg-sky-700 transition"
+                >
+                  <FiUser size={18} />
+                  Login
+                </button>
+              </>
+            )}
 
           </div>
 

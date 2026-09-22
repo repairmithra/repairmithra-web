@@ -9,11 +9,18 @@ import {
 
 import Breadcrumbs from "../../components/booking/Breadcrumbs";
 import ServiceNotFound from "../../components/booking/ServiceNotFound";
-import { getServiceBySlug, serviceBenefits } from "../../data/servicesData";
+import { ServicesError, ServicesLoading } from "../../components/booking/ServicesStatus";
+import { serviceBenefits } from "../../data/servicesData";
+import { useServices } from "../../hooks/useServices";
 import { formatINR } from "../../utils/format";
 
 function ServiceDetail() {
   const { slug } = useParams();
+  const { isLoading, error, reload, getServiceBySlug } = useServices();
+
+  if (isLoading) return <ServicesLoading />;
+  if (error) return <ServicesError message={error} onRetry={reload} />;
+
   const service = getServiceBySlug(slug);
 
   if (!service) return <ServiceNotFound />;
@@ -36,23 +43,56 @@ function ServiceDetail() {
           ]}
         />
 
-        <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+        <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           {/* Header */}
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <span
-              className={`flex h-28 w-full shrink-0 items-center justify-center rounded-2xl sm:w-44 ${service.tone}`}
-            >
-              <Icon size={56} strokeWidth={1.5} aria-hidden="true" />
-            </span>
-
-            <div>
-              <h1 className="text-3xl font-extrabold text-slate-900">
-                {service.title}
-              </h1>
-              <p className="mt-2 text-slate-600">{service.tagline}</p>
+          {service.image ? (
+            <div className="relative h-48 w-full overflow-hidden bg-slate-100 sm:h-64">
+              {/* Soft blurred backdrop so the frame is always filled */}
+              <img
+                src={service.image}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 h-full w-full scale-110 object-cover object-center blur-xl opacity-50"
+              />
+              {/* Full, uncropped image on top */}
+              <img
+                src={service.image}
+                alt={service.title}
+                className="relative h-full w-full object-contain"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 p-5 sm:p-8">
+                <span
+                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/90 shadow-sm ${service.tone.split(" ")[1] ?? "text-slate-600"}`}
+                >
+                  <Icon size={28} strokeWidth={1.75} aria-hidden="true" />
+                </span>
+                <div>
+                  <h1 className="text-2xl font-extrabold text-white sm:text-3xl">
+                    {service.title}
+                  </h1>
+                  <p className="mt-1 text-sm text-white/90 sm:text-base">{service.tagline}</p>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-8">
+              <span
+                className={`flex h-28 w-full shrink-0 items-center justify-center rounded-2xl sm:w-44 ${service.tone}`}
+              >
+                <Icon size={56} strokeWidth={1.5} aria-hidden="true" />
+              </span>
 
+              <div>
+                <h1 className="text-3xl font-extrabold text-slate-900">
+                  {service.title}
+                </h1>
+                <p className="mt-2 text-slate-600">{service.tagline}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="p-5 sm:p-8">
           {/* Visit fee + estimate */}
           <div className="mt-7 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-rose-100 bg-rose-50/70 p-5">
@@ -108,6 +148,7 @@ function ServiceDetail() {
           </ul>
 
           {/* Common issues */}
+          {service.issues.length > 0 && (
           <div className="mt-7 border-t border-slate-200 pt-6">
             <h2 className="font-bold text-slate-900">
               Common {service.issueLabel} Issues We Fix
@@ -126,6 +167,7 @@ function ServiceDetail() {
               ))}
             </ul>
           </div>
+          )}
 
           <Link
             to={`/services/${service.slug}/book`}
@@ -134,6 +176,7 @@ function ServiceDetail() {
             <LuCalendarCheck size={22} aria-hidden="true" />
             Book {service.title} Visit
           </Link>
+          </div>
         </div>
       </div>
     </div>

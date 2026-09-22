@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   LuArrowRight,
   LuCalendar,
@@ -7,15 +7,20 @@ import {
   LuLoader,
   LuLocateFixed,
   LuMapPin,
+  LuTriangleAlert,
 } from "react-icons/lu";
 
 import Breadcrumbs from "../../components/booking/Breadcrumbs";
-import BookingStepper from "../../components/booking/BookingStepper";
+import BookingStepper from "../../components/booking/Bookingstepper";
 import ServiceNotFound from "../../components/booking/ServiceNotFound";
+import { ServicesError, ServicesLoading } from "../../components/booking/ServicesStatus";
 import { LOCATIONS } from "../../components/navbar/LocationSelector";
-import { getServiceBySlug } from "../../data/servicesData";
-import { getStoredUser, loadDraft, saveDraft } from "../../utils/bookingStorage";
+import { useServices } from "../../hooks/useServices";
+import { isAuthError } from "../../utils/api";
+import { getStoredUser, useAuth } from "../../utils/auth";
+import { loadDraft, saveDraft } from "../../utils/bookingStorage";
 import { addDays, formatINR, toISODate } from "../../utils/format";
+import { geocodeAddress, lookupCurrentLocation } from "../../utils/geocode";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -42,56 +47,12 @@ const slotsForDate = (isoDate) => {
   return TIME_SLOTS.filter((slot) => slot.startHour * 60 >= nowMinutes + 60);
 };
 
-// ---------------------------------------------------------------------------
-// “Use current location”: browser GPS → OpenStreetMap (Nominatim) reverse lookup
-// ---------------------------------------------------------------------------
+// Coordinates are only valid for the city + pincode they were found for.
+const coordsKeyFor = (city, pincode) => `${city}|${pincode}`;
 
-const getPosition = () =>
-  new Promise((resolve, reject) => {
-    if (!("geolocation" in navigator)) {
-      reject(new Error("unsupported"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 15000,
-    });
-  });
-
-async function lookupCurrentLocation() {
-  const { coords } = await getPosition();
-
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${coords.latitude}&lon=${coords.longitude}`,
-    { headers: { Accept: "application/json" } }
-  );
-  if (!response.ok) throw new Error("lookup-failed");
-
-  const { address = {}, display_name: displayName = "" } = await response.json();
-
-  const street = [
-    address.house_number,
-    address.road,
-    address.neighbourhood || address.suburb,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  const city =
-    address.city ||
-    address.town ||
-    address.village ||
-    address.county ||
-    (address.state_district || "").replace(/ district$/i, "");
-
-  const postcode = (address.postcode || "").replace(/\s/g, "");
-
-  return {
-    address: street || displayName,
-    city,
-    pincode: /^\d{6}$/.test(postcode) ? postcode : "",
-  };
-}
+// Unchanged details → keep the booking already created for this draft, so
+// going back and forward does not create duplicate bookings.
+const SAME_BOOKING_FIELDS = ["address", "city", "pincode", "date", "time", "notes"];
 
 // ---------------------------------------------------------------------------
 // Small presentational helpers
@@ -143,13 +104,20 @@ function BookServiceForm({ service }) {
       city: draft?.city ?? "Hyderabad",
       pincode: draft?.pincode ?? user?.pincode ?? "",
       date: draft?.date ?? tomorrow,
-      time: draft?.time ?? "10:00 AM - 12:00 PM",
+      time: draft?.time ?? TIME_SLOTS[1].label,
       notes: draft?.notes ?? "",
+
+      // Map position of the address (filled by GPS or looked up on submit)
+      latitude: draft?.latitude ?? null,
+      longitude: draft?.longitude ?? null,
+      coordsKey: draft?.coordsKey ?? "",
     };
   });
   const [errors, setErrors] = useState({});
   const [locating, setLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState(null); // { type, text }
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const availableSlots = slotsForDate(form.date);
   const cityOptions =
@@ -180,12 +148,20 @@ function BookServiceForm({ service }) {
     try {
       const found = await lookupCurrentLocation();
 
-      setForm((prev) => ({
-        ...prev,
-        address: found.address || prev.address,
-        city: found.city || prev.city,
-        pincode: found.pincode || prev.pincode,
-      }));
+      setForm((prev) => {
+        const city = found.city || prev.city;
+        const pincode = found.pincode || prev.pincode;
+
+        return {
+          ...prev,
+          address: found.address || prev.address,
+          city,
+          pincode,
+          latitude: found.latitude,
+          longitude: found.longitude,
+          coordsKey: coordsKeyFor(city, pincode),
+        };
+      });
       setErrors((prev) => ({ ...prev, address: "", city: "", pincode: "" }));
       setLocationMessage({
         type: "success",
@@ -226,11 +202,14 @@ function BookServiceForm({ service }) {
     return !firstInvalid;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (submitting || !validate()) return;
 
-    saveDraft({
+    setSubmitting(true);
+    setSubmitError("");
+
+    const details = {
       serviceSlug: service.slug,
       address: form.address.trim(),
       city: form.city,
@@ -238,9 +217,60 @@ function BookServiceForm({ service }) {
       date: form.date,
       time: form.time,
       notes: form.notes.trim(),
+    };
+
+    // Keep what the customer typed, even if something below fails
+    saveDraft({
+      ...details,
+      latitude: form.latitude,
+      longitude: form.longitude,
+      coordsKey: form.coordsKey,
     });
 
-    navigate(`/services/${service.slug}/payment`);
+    try {
+      // 1. Where is the address on the map? (the booking is saved with its location)
+      let { latitude, longitude } = form;
+      const coordsKey = coordsKeyFor(form.city, form.pincode);
+
+      if (latitude === null || longitude === null || form.coordsKey !== coordsKey) {
+        ({ latitude, longitude } = await geocodeAddress(details));
+      }
+
+      // 2. Save the draft for the payment page
+      const previous = loadDraft(service.slug);
+      const unchanged =
+        previous?.bookingId &&
+        SAME_BOOKING_FIELDS.every((field) => previous[field] === details[field]);
+
+      saveDraft({
+        ...details,
+        latitude,
+        longitude,
+        coordsKey,
+        ...(unchanged
+          ? { bookingId: previous.bookingId, bookingCode: previous.bookingCode }
+          : {}),
+      });
+
+      navigate(`/services/${service.slug}/payment`);
+    } catch (err) {
+      // Session expired → the page wrapper sends the user to log in
+      if (isAuthError(err)) return;
+
+      if (err.message === "not-found") {
+        setSubmitError(
+          "We couldn't find this address on the map. Please check the city and pincode, or tap “Use current location”."
+        );
+      } else if (err.message === "lookup-failed" || err.name === "TimeoutError") {
+        setSubmitError(
+          "We couldn't check your location right now. Please try again in a moment."
+        );
+      } else {
+        setSubmitError(err.message || "Something went wrong. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const describedBy = (name) => (errors[name] ? `${name}-error` : undefined);
@@ -439,19 +469,43 @@ function BookServiceForm({ service }) {
                   maxLength={300}
                   value={form.notes}
                   onChange={(e) => update("notes", e.target.value)}
-                  placeholder={`E.g., ${service.issues[0]}, ${service.issues[1].toLowerCase()}, etc.`}
+                  placeholder={
+                    service.issues.length >= 2
+                      ? `E.g., ${service.issues[0]}, ${service.issues[1].toLowerCase()}, etc.`
+                      : "Tell us what needs fixing"
+                  }
                   className={`${inputClass(false)} resize-none`}
                 />
               </Field>
             </div>
           </section>
 
+          {submitError && (
+            <p
+              role="alert"
+              className="mt-6 flex items-start gap-2 rounded-lg bg-red-50 px-3.5 py-3 text-sm leading-5 text-red-800"
+            >
+              <LuTriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>{submitError}</span>
+            </p>
+          )}
+
           <button
             type="submit"
-            className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white shadow-md transition hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700"
+            disabled={submitting}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white shadow-md transition hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700 disabled:cursor-wait disabled:opacity-80"
           >
-            Continue to Payment
-            <LuArrowRight size={20} aria-hidden="true" />
+            {submitting ? (
+              <>
+                <LuLoader size={20} className="animate-spin" aria-hidden="true" />
+                Checking your address...
+              </>
+            ) : (
+              <>
+                Continue to Payment
+                <LuArrowRight size={20} aria-hidden="true" />
+              </>
+            )}
           </button>
         </form>
       </div>
@@ -461,6 +515,18 @@ function BookServiceForm({ service }) {
 
 function BookService() {
   const { slug } = useParams();
+  const location = useLocation();
+  const { isLoggedIn } = useAuth();
+  const { isLoading, error, reload, getServiceBySlug } = useServices();
+
+  // Booking needs an account — send guests to log in, then bring them back here
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (isLoading) return <ServicesLoading />;
+  if (error) return <ServicesError message={error} onRetry={reload} />;
+
   const service = getServiceBySlug(slug);
 
   if (!service) return <ServiceNotFound />;
