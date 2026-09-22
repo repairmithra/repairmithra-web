@@ -1,80 +1,89 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  FiUser,
-  FiMail,
-  FiPhone,
-  FiMapPin,
-} from "react-icons/fi";
+import { FiCreditCard, FiStar, FiBell, FiMessageSquare } from "react-icons/fi";
+
+import { apiFetch, isAuthError } from "../../utils/api";
+import { getToken, setSession } from "../../utils/auth";
+
+import ProfileSidebar from "./components/ProfileSidebar";
+import OverviewTab from "./components/OverviewTab";
+import BookingsTab from "./components/BookingsTab";
+import SupportTab from "./components/SupportTab";
+import PlaceholderTab from "./components/PlaceholderTab";
+import EditProfileModal from "./components/EditProfileModal";
 
 function Profile() {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("rm_token");
-
-    if (!token) {
-      navigate("/login", { replace: true });
+    if (!getToken()) {
+      navigate("/login", { replace: true, state: { from: "/profile" } });
       return;
     }
 
-    const fetchProfile = async () => {
+    const controller = new AbortController();
+
+    const load = async () => {
       try {
-        const response = await fetch(
-          "http://localhost:5000/api/auth/profile",
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const [profileRes, bookingsRes] = await Promise.all([
+          apiFetch("/api/auth/profile", { auth: true, signal: controller.signal }),
+          apiFetch("/api/bookings", { auth: true, signal: controller.signal }),
+        ]);
 
-        const data = await response.json();
+        setUser(profileRes.data);
+        setBookings(bookingsRes.bookings || []);
+      } catch (err) {
+        if (err?.name === "AbortError") return;
 
-        if (!response.ok) {
-          throw new Error(
-            data.message || "Failed to load profile"
-          );
+        if (isAuthError(err)) {
+          navigate("/login", { replace: true, state: { from: "/profile" } });
+          return;
         }
 
-        setUser(data.data);
-      } catch (error) {
-        console.error("Profile error:", error);
-        setError(error.message);
+        console.error("Profile error:", err);
+        setError(err.message || "Failed to load profile");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
-    fetchProfile();
+    load();
+
+    return () => controller.abort();
   }, [navigate]);
+
+  const handleSaved = (updatedUser) => {
+    setUser(updatedUser);
+    setEditOpen(false);
+
+    // Keep the locally cached session user (used elsewhere in the app) fresh
+    const token = getToken();
+    if (token) setSession(token, updatedUser);
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-600 text-lg">
-          Loading profile...
-        </p>
+      <div className="flex min-h-[60vh] items-center justify-center bg-gray-50">
+        <p className="text-lg text-gray-600">Loading profile...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex min-h-[60vh] items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-red-600 mb-4">
-            {error}
-          </p>
-
+          <p className="mb-4 text-red-600">{error}</p>
           <button
             onClick={() => navigate("/login")}
-            className="rounded-xl bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700"
+            className="rounded-xl bg-sky-600 px-6 py-3 font-semibold text-white hover:bg-sky-700"
           >
             Go to Login
           </button>
@@ -83,136 +92,74 @@ function Profile() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="mx-auto max-w-2xl">
+    <div className="min-h-screen bg-gray-50 px-4 py-8">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 lg:flex-row">
+        <ProfileSidebar active={activeTab} onSelect={setActiveTab} messagesCount={0} />
 
-        {/* Profile Card */}
-        <div className="overflow-hidden rounded-2xl bg-white shadow-lg border border-gray-100">
+        <main className="min-w-0 flex-1">
+          {activeTab === "overview" && (
+            <OverviewTab
+              user={user}
+              bookings={bookings}
+              onEdit={() => setEditOpen(true)}
+              onGoToTab={setActiveTab}
+            />
+          )}
 
-          {/* Profile Header */}
-          <div className="bg-blue-600 px-6 py-8 text-white">
-            <div className="flex items-center gap-4">
+          {activeTab === "bookings" && <BookingsTab bookings={bookings} />}
 
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-blue-600">
-                <FiUser size={30} />
-              </div>
+          {activeTab === "wallet" && (
+            <PlaceholderTab
+              icon={FiCreditCard}
+              title="Your wallet is empty"
+              description="Wallet & payments is coming soon. You'll be able to track refunds, credits and saved payment methods here."
+              actionLabel="Book a Service"
+              onAction={() => navigate("/services")}
+            />
+          )}
 
-              <div>
-                <h1 className="text-2xl font-bold">
-                  {user.fullName}
-                </h1>
+          {activeTab === "reviews" && (
+            <PlaceholderTab
+              icon={FiStar}
+              title="No reviews yet"
+              description="Once a technician completes a job for you, you'll be able to rate the service and leave feedback here."
+              actionLabel={bookings.length ? "View My Bookings" : "Book a Service"}
+              onAction={() => (bookings.length ? setActiveTab("bookings") : navigate("/services"))}
+            />
+          )}
 
-                <p className="text-blue-100">
-                  RepairMithra Customer
-                </p>
-              </div>
+          {activeTab === "support" && <SupportTab />}
 
-            </div>
-          </div>
+          {activeTab === "messages" && (
+            <PlaceholderTab
+              icon={FiMessageSquare}
+              title="No messages yet"
+              description="Conversations with your technician or our support team will show up here once you have an active booking."
+              actionLabel="Book a Service"
+              onAction={() => navigate("/services")}
+            />
+          )}
 
-          {/* Details */}
-          <div className="space-y-6 p-6">
-
-            {/* Email */}
-            <div className="flex items-start gap-4">
-              <FiMail
-                size={22}
-                className="mt-1 text-blue-600"
-              />
-
-              <div>
-                <p className="text-sm text-gray-500">
-                  Email
-                </p>
-
-                <p className="font-medium text-gray-900">
-                  {user.email}
-                </p>
-              </div>
-            </div>
-
-            {/* Phone */}
-            <div className="flex items-start gap-4">
-              <FiPhone
-                size={22}
-                className="mt-1 text-blue-600"
-              />
-
-              <div>
-                <p className="text-sm text-gray-500">
-                  Phone
-                </p>
-
-                <p className="font-medium text-gray-900">
-                  {user.phone}
-                </p>
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="flex items-start gap-4">
-              <FiMapPin
-                size={22}
-                className="mt-1 text-blue-600"
-              />
-
-              <div>
-                <p className="text-sm text-gray-500">
-                  Address
-                </p>
-
-                <p className="font-medium text-gray-900">
-                  {user.address}
-                </p>
-              </div>
-            </div>
-
-            {/* Pincode */}
-            <div className="flex items-start gap-4">
-              <FiMapPin
-                size={22}
-                className="mt-1 text-blue-600"
-              />
-
-              <div>
-                <p className="text-sm text-gray-500">
-                  Pincode
-                </p>
-
-                <p className="font-medium text-gray-900">
-                  {user.pincode}
-                </p>
-              </div>
-            </div>
-
-            {/* Account Type */}
-            <div className="border-t pt-5">
-              <p className="text-sm text-gray-500">
-                Account Type
-              </p>
-
-              <p className="font-medium capitalize text-gray-900">
-                {user.role}
-              </p>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Back Home */}
-        <button
-          onClick={() => navigate("/")}
-          className="mt-6 w-full rounded-xl bg-blue-600 py-3 text-white font-semibold transition hover:bg-blue-700"
-        >
-          Back to Home
-        </button>
-
+          {activeTab === "notifications" && (
+            <PlaceholderTab
+              icon={FiBell}
+              title="You're all caught up"
+              description="You have no notifications right now. Updates about your bookings and technicians will appear here."
+            />
+          )}
+        </main>
       </div>
+
+      {editOpen && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setEditOpen(false)}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }

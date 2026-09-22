@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiMapPin, FiTool } from "react-icons/fi";
 
-import { services } from "../../data/servicesData";
+import { useServices } from "../../hooks/useServices";
 
 function QuickBooking() {
   const navigate = useNavigate();
+  const { services, isLoading } = useServices();
   const [selectedSlug, setSelectedSlug] = useState("");
 
   const handleBook = () => {
@@ -42,7 +43,9 @@ function QuickBooking() {
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-4 pl-12 pr-4 outline-none transition focus:border-blue-600"
           >
 
-            <option value="">Select Service</option>
+            <option value="">
+              {isLoading ? "Loading services..." : "Select Service"}
+            </option>
 
             {services.map((service) => (
 

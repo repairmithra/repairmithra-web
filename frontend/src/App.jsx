@@ -13,6 +13,7 @@ import BookService from "./pages/services/BookService";
 import Payment from "./pages/services/Payment";
 import BookingConfirmed from "./pages/booking/BookingConfirmed";
 import BookingStatus from "./pages/booking/BookingStatus";
+import Profile from "./pages/profile/Profile";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Registration />} />
+        <Route path="/profile" element={<Profile />} />
 
         {/* Services → detail → address & schedule → payment → confirmation */}
         <Route path="/services" element={<AllServices />} />

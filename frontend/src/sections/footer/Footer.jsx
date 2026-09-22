@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-import { services } from "../../data/servicesData";
+import { useServices } from "../../hooks/useServices";
 import {
   FiMail,
   FiMapPin,
@@ -9,6 +9,7 @@ import {
 
 function Footer() {
   const navigate = useNavigate();
+  const { services } = useServices();
 
   return (
     <footer className="bg-slate-950 text-white">

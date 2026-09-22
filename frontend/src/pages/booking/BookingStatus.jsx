@@ -1,25 +1,54 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { LuCheck } from "react-icons/lu";
 
-import { getBooking } from "../../utils/bookingStorage";
+import {
+  BookingError,
+  BookingLoading,
+  BookingNotFound,
+} from "../../components/booking/BookingStates";
+import { SUPPORT } from "../../config/site";
+import { useBooking } from "../../hooks/useBooking";
+import { useAuth } from "../../utils/auth";
 import { formatDate, formatINR } from "../../utils/format";
 
-// Stages a booking moves through. Until a bookings API exists, every new
-// booking sits at “confirmed”, which shows step 2 (technician assignment) as current.
-const STAGES = ["confirmed", "assigned", "visiting", "completed"];
+// Backend booking status → index of the step in TIMELINE that is currently in
+// progress. Steps before it are shown as done. An index equal to
+// TIMELINE.length means everything is done.
+const STATUS_TO_STEP = {
+  pending_payment: 0,
+  confirmed: 1,
+  technician_assigned: 2,
+  technician_on_the_way: 2,
+  technician_arrived: 2,
+  inspection_completed: 3,
+  repair_in_progress: 3,
+  completed: 5,
+};
 
 const TIMELINE = [
   {
     title: "Booking confirmed",
-    text: (b) => `Visit fee of ${formatINR(b.payment.amount)} paid.`,
+    text: (b) =>
+      b.paymentStatus === "paid"
+        ? `Visit fee of ${formatINR(b.payment?.amount ?? b.visitFee)} paid.`
+        : `Waiting for the visit fee of ${formatINR(b.visitFee)} to be paid.`,
   },
   {
     title: "Technician assigned",
-    text: () => "We are notifying nearby technicians. You will get a call/notification once one accepts.",
+    text: (b) =>
+      b.technician
+        ? `${b.technician.name} has been assigned to your booking.${
+            b.technician.phone ? ` Contact: ${b.technician.phone}.` : ""
+          }`
+        : "We are notifying nearby technicians. You will get a call/notification once one accepts.",
   },
   {
     title: "Technician visit",
-    text: (b) => `Scheduled for ${formatDate(b.date)}, ${b.time}.`,
+    text: (b) => {
+      if (b.status === "technician_on_the_way") return "Your technician is on the way.";
+      if (b.status === "technician_arrived") return "Your technician has arrived.";
+      return `Scheduled for ${formatDate(b.date)}, ${b.time}.`;
+    },
   },
   {
     title: "Diagnosis & repair",
@@ -31,39 +60,34 @@ const TIMELINE = [
   },
 ];
 
-function BookingStatus() {
-  const { bookingId } = useParams();
-  const booking = getBooking(bookingId);
+function BookingStatusView({ bookingId }) {
+  const { booking, status, error, reload } = useBooking(bookingId);
 
-  if (!booking) {
-    return (
-      <section className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-        <h1 className="text-3xl font-bold text-slate-900">Booking not found</h1>
-        <p className="mt-3 max-w-md text-slate-600">
-          We couldn't find a booking with ID {bookingId} on this device.
-        </p>
-        <Link
-          to="/services"
-          className="mt-6 rounded-xl bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700"
-        >
-          Book a service
-        </Link>
-      </section>
-    );
-  }
+  if (status === "loading") return <BookingLoading />;
+  if (status === "notfound") return <BookingNotFound />;
+  if (status === "error") return <BookingError message={error?.message} onRetry={reload} />;
 
-  // Index of the stage currently in progress in TIMELINE
-  const currentIndex = Math.min(STAGES.indexOf(booking.status) + 1, TIMELINE.length - 1);
+  const isCancelled = booking.status === "cancelled";
+
+  // Index of the step currently in progress in TIMELINE
+  const currentIndex = STATUS_TO_STEP[booking.status] ?? 1;
 
   return (
     <div className="min-h-[70vh] bg-gradient-to-b from-slate-50 to-blue-50/50 px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-2xl">
-        <p className="text-sm text-slate-500">Booking {booking.id}</p>
+        <p className="text-sm text-slate-500">Booking {booking.code}</p>
         <h1 className="mt-1 text-3xl font-extrabold text-slate-900">Booking Status</h1>
         <p className="mt-1 text-slate-600">
           {booking.serviceTitle} on {formatDate(booking.date)}, {booking.time}
         </p>
 
+        {isCancelled && (
+          <p role="status" className="mt-8 rounded-2xl bg-red-50 p-5 text-sm text-red-800">
+            This booking has been cancelled. Need help? Call {SUPPORT.phone}.
+          </p>
+        )}
+
+        {!isCancelled && (
         <ol className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           {TIMELINE.map((step, index) => {
             const done = index < currentIndex;
@@ -113,6 +137,7 @@ function BookingStatus() {
             );
           })}
         </ol>
+        )}
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
@@ -131,6 +156,18 @@ function BookingStatus() {
       </div>
     </div>
   );
+}
+
+function BookingStatus() {
+  const { bookingId } = useParams();
+  const location = useLocation();
+  const { isLoggedIn } = useAuth();
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  return <BookingStatusView key={bookingId} bookingId={bookingId} />;
 }
 
 export default BookingStatus;
