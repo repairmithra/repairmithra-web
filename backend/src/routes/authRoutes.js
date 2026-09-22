@@ -5,6 +5,7 @@ import {
   registerUser,
   loginUser,
   getProfile,
+  updateProfile,
   sendVerificationCode,
   verifyVerificationCode,
 } from "../controllers/authController.js";
@@ -69,6 +70,12 @@ router.get(
   "/profile",
   authMiddleware,
   getProfile
+);
+
+router.patch(
+  "/profile",
+  authMiddleware,
+  updateProfile
 );
 
 export default router;

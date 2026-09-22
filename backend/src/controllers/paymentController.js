@@ -3,6 +3,7 @@ import Razorpay from "razorpay";
 import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import Service from "../models/Service.js";
+import { isObjectId } from "../utils/validators.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -17,6 +18,13 @@ export const createPaymentOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Booking ID is required",
+      });
+    }
+
+    if (!isObjectId(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID",
       });
     }
 
@@ -141,8 +149,14 @@ export const createPaymentOrder = async (req, res) => {
       message: "Failed to create Razorpay payment order",
     });
   }
-}
-  export const verifyPayment = async (req, res) => {
+};
+
+// ======================================================
+// VERIFY PAYMENT  (POST /api/payments/verify)
+// Safe to call more than once for the same payment.
+// ======================================================
+
+export const verifyPayment = async (req, res) => {
   try {
     const {
       razorpay_order_id,
@@ -163,6 +177,18 @@ export const createPaymentOrder = async (req, res) => {
       });
     }
 
+    if (
+      !isObjectId(bookingId) ||
+      typeof razorpay_order_id !== "string" ||
+      typeof razorpay_payment_id !== "string" ||
+      typeof razorpay_signature !== "string"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment verification details",
+      });
+    }
+
     const payment = await Payment.findOne({
       booking: bookingId,
       gatewayOrderId: razorpay_order_id,
@@ -176,27 +202,38 @@ export const createPaymentOrder = async (req, res) => {
       });
     }
 
-    const generatedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
+    // Already verified earlier (e.g. the request was retried): don't
+    // re-check or overwrite anything, just make sure the booking is confirmed.
+    if (payment.status !== "paid") {
+      const expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest("hex");
 
-    if (generatedSignature !== razorpay_signature) {
-      payment.status = "failed";
+      const expected = Buffer.from(expectedSignature, "hex");
+      const received = Buffer.from(razorpay_signature, "hex");
+
+      const isValidSignature =
+        expected.length === received.length &&
+        crypto.timingSafeEqual(expected, received);
+
+      if (!isValidSignature) {
+        payment.status = "failed";
+        await payment.save();
+
+        return res.status(400).json({
+          success: false,
+          message: "Invalid payment signature",
+        });
+      }
+
+      payment.status = "paid";
+      payment.gatewayPaymentId = razorpay_payment_id;
+      payment.gatewaySignature = razorpay_signature;
+      payment.paidAt = new Date();
+
       await payment.save();
-
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payment signature",
-      });
     }
-
-    payment.status = "paid";
-    payment.gatewayPaymentId = razorpay_payment_id;
-    payment.gatewaySignature = razorpay_signature;
-    payment.paidAt = new Date();
-
-    await payment.save();
 
     const booking = await Booking.findOne({
       _id: bookingId,
@@ -211,7 +248,13 @@ export const createPaymentOrder = async (req, res) => {
     }
 
     booking.paymentStatus = "paid";
-    booking.status = "confirmed";
+    booking.paymentId = payment.gatewayPaymentId;
+
+    // Only move a booking forward from "pending_payment"; never pull a
+    // booking that a technician is already working on back to "confirmed".
+    if (booking.status === "pending_payment") {
+      booking.status = "confirmed";
+    }
 
     await booking.save();
 

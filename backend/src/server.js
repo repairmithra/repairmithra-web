@@ -20,9 +20,16 @@ console.log(
   Boolean(process.env.RAZORPAY_KEY_SECRET)
 );
 
+console.log(
+  "JWT_SECRET loaded:",
+  Boolean(process.env.JWT_SECRET)
+);
+
 connectDB();
 
-app.listen(PORT, () => {
+// NOTE: this used to call app.listen() twice (one nested inside the other,
+// a leftover from a merge), i.e. it tried to open the same port two times.
+// One call is all that is needed.
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
-});});
+});

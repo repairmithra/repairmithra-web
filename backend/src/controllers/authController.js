@@ -91,6 +91,26 @@ export const sendVerificationCode = async (req, res) => {
     }
 
     // --------------------------------------------------
+    // DEVELOPMENT ONLY: show the code in this terminal instead of e-mailing
+    // it, so you can register without a Resend account.
+    // Needs DEV_LOG_OTP=true in .env, and is ignored when NODE_ENV=production.
+    // --------------------------------------------------
+
+    if (
+      process.env.DEV_LOG_OTP === "true" &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      console.log(
+        `🔑 [DEV] Verification code for ${email}: ${verificationCode}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Verification code sent successfully",
+      });
+    }
+
+    // --------------------------------------------------
     // SEND EMAIL
     // --------------------------------------------------
 
@@ -103,7 +123,9 @@ export const sendVerificationCode = async (req, res) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          // .env uses EMAIL_FROM (RESEND_FROM_EMAIL kept as an alias)
           from:
+            process.env.EMAIL_FROM ||
             process.env.RESEND_FROM_EMAIL ||
             "RepairMithra <noreply@repairmithra.com>",
           to: [email],
@@ -544,6 +566,107 @@ export const loginUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to login",
+    });
+  }
+};
+
+// ======================================================
+// UPDATE PROFILE
+// ======================================================
+
+export const updateProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    let { fullName, phone, address, pincode } = req.body;
+
+    if (fullName !== undefined) {
+      fullName = fullName.trim();
+
+      if (fullName.length < 2 || fullName.length > 60) {
+        return res.status(400).json({
+          success: false,
+          message: "Name must be between 2 and 60 characters",
+        });
+      }
+
+      user.fullName = fullName;
+    }
+
+    if (phone !== undefined) {
+      phone = phone.trim();
+
+      if (!/^[6-9][0-9]{9}$/.test(phone)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please enter a valid Indian mobile number",
+        });
+      }
+
+      const existingPhone = await User.findOne({
+        phone,
+        _id: { $ne: user._id },
+      });
+
+      if (existingPhone) {
+        return res.status(409).json({
+          success: false,
+          message: "Phone number is already registered",
+        });
+      }
+
+      user.phone = phone;
+    }
+
+    if (address !== undefined) {
+      address = address.trim();
+
+      if (address.length < 5 || address.length > 250) {
+        return res.status(400).json({
+          success: false,
+          message: "Address must be between 5 and 250 characters",
+        });
+      }
+
+      user.address = address;
+    }
+
+    if (pincode !== undefined) {
+      pincode = pincode.trim();
+
+      if (!/^[0-9]{6}$/.test(pincode)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please enter a valid 6 digit pincode",
+        });
+      }
+
+      user.pincode = pincode;
+    }
+
+    await user.save();
+
+    const updated = user.toObject();
+    delete updated.password;
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: updated,
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to update profile",
     });
   }
 };

@@ -1,6 +1,23 @@
 import Technician from "../models/Technician.js";
 import Booking from "../models/Booking.js";
 
+import {
+  TIME_SLOTS,
+  dayRange,
+  parseBookingDate,
+} from "../utils/schedule.js";
+
+import {
+  isObjectId,
+  isValidLatLng,
+  toCoordinate,
+} from "../utils/validators.js";
+
+// GET /api/technicians/nearby
+//   ?serviceId=&latitude=&longitude=&bookingDate=YYYY-MM-DD&timeSlot=
+//
+// Used by the customer booking page to check that someone can actually
+// take the job BEFORE the customer pays the visit fee.
 export const findNearbyTechnicians = async (req, res) => {
   try {
     const {
@@ -25,58 +42,48 @@ export const findNearbyTechnicians = async (req, res) => {
       });
     }
 
-    const lat = Number(latitude);
-    const lng = Number(longitude);
+    if (!isObjectId(serviceId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid service",
+      });
+    }
 
-    if (
-      Number.isNaN(lat) ||
-      Number.isNaN(lng) ||
-      lat < -90 ||
-      lat > 90 ||
-      lng < -180 ||
-      lng > 180
-    ) {
+    const lat = toCoordinate(latitude);
+    const lng = toCoordinate(longitude);
+
+    if (!isValidLatLng(lat, lng)) {
       return res.status(400).json({
         success: false,
         message: "Invalid location coordinates",
       });
     }
 
-    const allowedSlots = [
-      "06:00 AM - 10:00 AM",
-      "10:00 AM - 02:00 PM",
-      "02:00 PM - 06:00 PM",
-      "06:00 PM - 10:00 PM",
-    ];
-
-    if (!allowedSlots.includes(timeSlot)) {
+    if (typeof timeSlot !== "string" || !TIME_SLOTS.includes(timeSlot)) {
       return res.status(400).json({
         success: false,
         message: "Invalid booking time slot",
       });
     }
 
-    const selectedDate = new Date(bookingDate);
+    const selectedDate = parseBookingDate(bookingDate);
 
-    if (Number.isNaN(selectedDate.getTime())) {
+    if (!selectedDate) {
       return res.status(400).json({
         success: false,
         message: "Invalid booking date",
       });
     }
 
-    // Start and end of selected day
-    const startOfDay = new Date(selectedDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Whole booking day, [start, end)
+    const { start, end } = dayRange(selectedDate);
 
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Find technicians already assigned for this date + slot
+    // Technicians already assigned to a booking in this date + slot.
+    // Booking.technician stores the technician's USER id.
     const existingBookings = await Booking.find({
       bookingDate: {
-        $gte: startOfDay,
-        $lte: endOfDay,
+        $gte: start,
+        $lt: end,
       },
 
       timeSlot,
@@ -90,7 +97,7 @@ export const findNearbyTechnicians = async (req, res) => {
       },
     }).select("technician");
 
-    const busyTechnicianIds = existingBookings
+    const busyUserIds = existingBookings
       .map((booking) => booking.technician)
       .filter(Boolean);
 
@@ -112,27 +119,32 @@ export const findNearbyTechnicians = async (req, res) => {
       },
     };
 
-    // Exclude technicians already booked
-    if (busyTechnicianIds.length > 0) {
-      query._id = {
-        $nin: busyTechnicianIds,
+    // Exclude technicians who are already booked.
+    // (Technician._id is NOT the same as the user id stored on bookings,
+    // so this must filter on the `user` field.)
+    if (busyUserIds.length > 0) {
+      query.user = {
+        $nin: busyUserIds,
       };
     }
 
     const technicians = await Technician.find(query)
-      .populate(
-        "user",
-        "fullName email phone address pincode"
-      )
-      .populate(
-        "services",
-        "name slug"
-      );
+      .populate("user", "fullName")
+      .populate("services", "name slug");
 
+    // Customers only need to know that help is available. Never send a
+    // technician's phone, email, home address or exact location.
     return res.status(200).json({
       success: true,
       count: technicians.length,
-      technicians,
+      technicians: technicians.map((technician) => ({
+        id: technician._id,
+        name: technician.user?.fullName || "RepairMithra Technician",
+        services: technician.services.map((service) => ({
+          name: service.name,
+          slug: service.slug,
+        })),
+      })),
     });
   } catch (error) {
     console.error(

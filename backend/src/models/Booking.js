@@ -1,7 +1,18 @@
 import mongoose from "mongoose";
 
+import { TIME_SLOTS } from "../utils/schedule.js";
+
 const bookingSchema = new mongoose.Schema(
   {
+    // Human-friendly reference shown to the customer, e.g. RM-20260920-K7M2
+    // (sparse so older bookings created before this field still work)
+    bookingCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+
     // Customer who created the booking
     customer: {
       type: mongoose.Schema.Types.ObjectId,
@@ -25,10 +36,25 @@ const bookingSchema = new mongoose.Schema(
       trim: true,
     },
 
+    city: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 80,
+    },
+
     pincode: {
       type: String,
       required: true,
       match: /^[0-9]{6}$/,
+    },
+
+    // Optional note from the customer about the problem
+    notes: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 300,
     },
 
     // Customer location
@@ -58,15 +84,10 @@ const bookingSchema = new mongoose.Schema(
     timeSlot: {
       type: String,
       required: true,
-      enum: [
-        "06:00 AM - 10:00 AM",
-        "10:00 AM - 02:00 PM",
-        "02:00 PM - 06:00 PM",
-        "06:00 PM - 10:00 PM",
-      ],
+      enum: TIME_SLOTS,
     },
 
-    // Technician assigned later
+    // Technician assigned later (User account of the technician)
     technician: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
