@@ -1,6 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import { FiArrowRight, FiCheckCircle, FiStar } from "react-icons/fi";
 
 function HeroContent() {
+  const navigate = useNavigate();
+
   return (
     <div className="max-w-xl">
 
@@ -58,6 +61,7 @@ function HeroContent() {
       <div className="mt-10 flex flex-col gap-4 sm:flex-row">
 
         <button
+          onClick={() => navigate("/services")}
           className="
           rounded-2xl
           bg-gradient-to-r
@@ -79,6 +83,7 @@ function HeroContent() {
         </button>
 
         <button
+          onClick={() => navigate("/services")}
           className="
           flex
           items-center

@@ -1,67 +1,19 @@
-import ServiceCard from "./ServiceCard";
+import { useNavigate } from "react-router-dom";
 
-import laptop from "../../assets/images/services/laptop.jpg";
-import mobile from "../../assets/images/services/mobile.jpg";
-import ac from "../../assets/images/services/ac.jpg";
-import plumbing from "../../assets/images/services/plumbing.jpg";
-import electrical from "../../assets/images/services/electrical.jpg";
-import cleaning from "../../assets/images/services/cleaning.jpg";
-import civilRepair from "../../assets/images/services/civil-repair.jpg";
-import wallPainting from "../../assets/images/services/wall-painting.jpg";
+import ServiceCard from "./ServiceCard";
+import { useServices } from "../../hooks/useServices";
 
 import { FiArrowRight } from "react-icons/fi";
 
+// How many services show on the homepage "Popular Services" preview.
+// The full list is always available on the "View All Services" page.
+const POPULAR_SERVICES_LIMIT = 4;
+
 function Services() {
-  const services = [
-    {
-      image: laptop,
-      title: "Laptop Repair",
-      description:
-        "Hardware repair, software troubleshooting, motherboard repair and performance optimization.",
-    },
-    {
-      image: mobile,
-      title: "Mobile Repair",
-      description:
-        "Screen replacement, battery replacement, charging issues and software repair.",
-    },
-    {
-      image: ac,
-      title: "AC Repair",
-      description:
-        "Installation, gas filling, servicing and complete air conditioner maintenance.",
-    },
-    {
-      image: plumbing,
-      title: "Plumbing",
-      description:
-        "Leak repairs, pipe fitting, bathroom maintenance and kitchen plumbing services.",
-    },
-    {
-      image: electrical,
-      title: "Electrical",
-      description:
-        "Switchboard installation, wiring, fan installation and electrical repairs.",
-    },
-    {
-      image: cleaning,
-      title: "Home Cleaning",
-      description:
-        "Professional home deep cleaning for kitchens, bathrooms and complete homes.",
-    },
-    {
-  image: civilRepair,
-  title: "Civil Repair",
-  description:
-    "Wall repairs, tile work, plastering, masonry work and other home civil maintenance services.",
-},
-{
-  image: wallPainting,
-  title: "Wall Painting",
-  description:
-    "Professional interior and exterior wall painting, touch-ups and complete painting services.",
-},
-  ];
+  const navigate = useNavigate();
+  const { services, isLoading, error, reload } = useServices();
+
+  const popularServices = services.slice(0, POPULAR_SERVICES_LIMIT);
 
   return (
     <section className="bg-slate-50 py-24">
@@ -89,26 +41,61 @@ function Services() {
 
         {/* Cards */}
 
-        <div className="mt-16 grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+        {error ? (
 
-          {services.map((service) => (
+          <div
+            role="alert"
+            className="mt-16 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+          >
+            <p className="font-semibold text-slate-900">
+              We couldn&apos;t load our services right now.
+            </p>
+            <p className="mt-1 text-sm text-slate-500">{error}</p>
+            <button
+              onClick={reload}
+              className="mt-5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Try again
+            </button>
+          </div>
 
-            <ServiceCard
-              key={service.title}
-              image={service.image}
-              title={service.title}
-              description={service.description}
-            />
+        ) : (
 
-          ))}
+          <div className="mt-16 grid gap-8 md:grid-cols-2 xl:grid-cols-4">
 
-        </div>
+            {isLoading
+              ? Array.from({ length: 4 }, (_, index) => (
+                  <div
+                    key={index}
+                    aria-hidden="true"
+                    className="h-80 animate-pulse rounded-3xl border border-slate-200 bg-white"
+                  />
+                ))
+              : popularServices.map((service) => (
+
+                  <ServiceCard
+                    key={service.slug}
+                    slug={service.slug}
+                    icon={service.icon}
+                    image={service.image}
+                    tone={service.tone}
+                    title={service.title}
+                    description={service.description}
+                    visitFee={service.visitFee}
+                  />
+
+                ))}
+
+          </div>
+
+        )}
 
         {/* Button */}
 
         <div className="mt-16 flex justify-center">
 
           <button
+            onClick={() => navigate("/services")}
             className="
               flex
               items-center

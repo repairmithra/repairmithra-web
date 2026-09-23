@@ -1,3 +1,6 @@
+import { useNavigate } from "react-router-dom";
+
+import { useServices } from "../../hooks/useServices";
 import {
   FiMail,
   FiMapPin,
@@ -5,6 +8,9 @@ import {
 } from "react-icons/fi";
 
 function Footer() {
+  const navigate = useNavigate();
+  const { services } = useServices();
+
   return (
     <footer className="bg-slate-950 text-white">
 
@@ -67,7 +73,12 @@ function Footer() {
             <ul className="space-y-3 text-slate-300">
 
               <li>About Us</li>
-              <li>Services</li>
+              <li
+                className="cursor-pointer hover:text-blue-400 transition"
+                onClick={() => navigate("/services")}
+              >
+                Services
+              </li>
               <li>Locations</li>
               <li>Join as Pro</li>
 
@@ -85,11 +96,15 @@ function Footer() {
 
             <ul className="space-y-3 text-slate-300">
 
-              <li>Laptop Repair</li>
-              <li>Mobile Repair</li>
-              <li>AC Repair</li>
-              <li>Electrical</li>
-              <li>Plumbing</li>
+              {services.map((service) => (
+                <li
+                  key={service.slug}
+                  className="cursor-pointer hover:text-blue-400 transition"
+                  onClick={() => navigate(`/services/${service.slug}`)}
+                >
+                  {service.title}
+                </li>
+              ))}
 
             </ul>
 
