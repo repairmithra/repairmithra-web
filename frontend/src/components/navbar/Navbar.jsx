@@ -15,7 +15,7 @@ import DesktopMenu from "./DesktopMenu";
 import MobileMenu from "./MobileMenu";
 import SearchBar from "./SearchBar";
 import LocationSelector from "./LocationSelector";
-import { useAuth } from "../../utils/auth";
+import { useAuth, isTechnician } from "../../utils/auth";
 
 function Navbar() {
   const navigate = useNavigate();
@@ -26,6 +26,8 @@ function Navbar() {
   // Updates automatically when the user logs in or out
   const { isLoggedIn, user } = useAuth();
   const initial = (user?.fullName || "?").trim().charAt(0).toUpperCase();
+  const partner = isTechnician(user);
+  const accountPath = partner ? "/partner/dashboard" : "/profile";
 
   return (
     <>
@@ -67,20 +69,21 @@ function Navbar() {
               <>
                 {/* Join as Partner */}
                 <button
+                  onClick={() => navigate("/partner/register")}
                   className="
                     flex
                     items-center
                     gap-2
                     rounded-xl
                     border-2
-                    border-sky-600
+                    border-emerald-600
                     px-5
                     py-3
-                    text-sky-600
+                    text-emerald-600
                     font-semibold
                     transition-all
                     duration-300
-                    hover:bg-sky-50
+                    hover:bg-emerald-50
                     hover:-translate-y-0.5
                   "
                 >
@@ -118,31 +121,38 @@ function Navbar() {
               <>
                 {/* Notifications */}
                 <button
-                  onClick={() => navigate("/profile")}
+                  onClick={() => navigate(accountPath)}
                   aria-label="Notifications"
                   title="Notifications"
-                  className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-gray-100 hover:text-sky-600"
+                  className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-gray-100 ${
+                    partner ? "hover:text-emerald-600" : "hover:text-sky-600"
+                  }`}
                 >
                   <FiBell size={20} />
                 </button>
 
-                {/* Profile chip — avatar + name, links to /profile.
-                    Logout lives inside the Profile page, not here. */}
+                {/* Profile chip — avatar + name, links to /profile (or the
+                    partner dashboard for a technician account). Logout lives
+                    inside that page, not here. */}
                 <button
-                  onClick={() => navigate("/profile")}
-                  aria-label="Go to profile"
-                  title="Profile"
+                  onClick={() => navigate(accountPath)}
+                  aria-label="Go to account"
+                  title="Account"
                   className="flex shrink-0 items-center gap-2 rounded-xl py-1.5 pl-1.5 pr-2 transition hover:bg-gray-100"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-600 font-semibold text-white">
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-semibold text-white ${
+                      partner ? "bg-emerald-600" : "bg-sky-600"
+                    }`}
+                  >
                     {initial}
                   </span>
-                  <span className="hidden text-left xl:block">
+                  <span className="hidden text-left lg:block">
                     <span className="block max-w-[9rem] truncate text-sm font-semibold leading-tight text-slate-900">
                       {user?.fullName || "My Account"}
                     </span>
-                    <span className="block text-xs leading-tight text-slate-500">
-                      {user?.isVerified ? "Verified Customer" : "Customer"}
+                    <span className={`block text-xs font-medium leading-tight ${partner ? "text-emerald-600" : "text-sky-600"}`}>
+                      {partner ? "RepairMithra Partner" : user?.isVerified ? "Verified Customer" : "Customer"}
                     </span>
                   </span>
                   <FiChevronDown size={16} className="hidden text-slate-400 xl:block" />
