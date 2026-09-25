@@ -139,6 +139,36 @@ const bookingSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
+
+    // ----------------------------------------------------------------
+    // Partner (technician) workflow
+    // ----------------------------------------------------------------
+
+    // Whether the assigned technician has accepted/rejected this job.
+    // null until a technician is proposed by the auto-assignment system.
+    technicianResponseStatus: {
+      type: String,
+      enum: ["pending", "accepted", "rejected"],
+      default: null,
+      index: true,
+    },
+
+    // Technicians who already rejected this job, so the same job is never
+    // offered to them twice while we look for the next nearest technician.
+    rejectedTechnicians: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    // Customer's rating of the completed job (given from the customer side;
+    // shown on the partner's Earnings/Job Details screens).
+    rating: {
+      score: { type: Number, min: 1, max: 5, default: null },
+      comment: { type: String, trim: true, maxlength: 300, default: "" },
+      ratedAt: { type: Date, default: null },
+    },
   },
   {
     timestamps: true,

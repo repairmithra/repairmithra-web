@@ -4,6 +4,7 @@ import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import Service from "../models/Service.js";
 import { isObjectId } from "../utils/validators.js";
+import { assignNearestTechnician } from "../utils/technicianAssignment.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -257,6 +258,12 @@ export const verifyPayment = async (req, res) => {
     }
 
     await booking.save();
+
+    // Try to find the nearest available technician and offer them this job
+    // (it will show up as a "New Request" on their partner dashboard).
+    if (!booking.technician) {
+      await assignNearestTechnician(booking);
+    }
 
     return res.status(200).json({
       success: true,

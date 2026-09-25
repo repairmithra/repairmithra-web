@@ -8,6 +8,7 @@ import serviceRoutes from "./routes/serviceRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import technicianRoutes from "./routes/technicianRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import partnerRoutes from "./routes/partnerRoutes.js";
 const app = express();
 
 // Middleware
@@ -33,5 +34,6 @@ app.use("/api/services", serviceRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/technicians", technicianRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/partner", partnerRoutes);
 
 export default app;

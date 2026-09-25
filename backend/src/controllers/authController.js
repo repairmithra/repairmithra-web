@@ -107,6 +107,7 @@ export const sendVerificationCode = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "Verification code sent successfully",
+        devOtp: verificationCode,
       });
     }
 
@@ -667,6 +668,110 @@ export const updateProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to update profile",
+    });
+  }
+};
+
+// ======================================================
+// ADD SAVED ADDRESS  (POST /api/auth/addresses)
+// An extra location (work, a relative's place, etc.) — separate from the
+// account's primary Home address.
+// ======================================================
+
+export const addAddress = async (req, res) => {
+  try {
+    let { label, address, pincode, latitude, longitude } = req.body;
+
+    label = typeof label === "string" ? label.trim() : "";
+    address = typeof address === "string" ? address.trim() : "";
+    pincode = typeof pincode === "string" ? pincode.trim() : "";
+
+    if (!label || label.length > 30) {
+      return res.status(400).json({
+        success: false,
+        message: "Please give this address a short label",
+      });
+    }
+
+    if (address.length < 5 || address.length > 250) {
+      return res.status(400).json({
+        success: false,
+        message: "Address must be between 5 and 250 characters",
+      });
+    }
+
+    if (!/^[0-9]{6}$/.test(pincode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid 6 digit pincode",
+      });
+    }
+
+    const entry = { label, address, pincode };
+
+    if (typeof latitude === "number" && typeof longitude === "number") {
+      entry.latitude = latitude;
+      entry.longitude = longitude;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $push: { addresses: entry } },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Address added",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Add address error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to add address",
+    });
+  }
+};
+
+// ======================================================
+// DELETE SAVED ADDRESS  (DELETE /api/auth/addresses/:addressId)
+// ======================================================
+
+export const deleteAddress = async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $pull: { addresses: { _id: req.params.addressId } } },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Address removed",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Delete address error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to remove address",
     });
   }
 };

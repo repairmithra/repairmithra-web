@@ -6,6 +6,8 @@ import {
   loginUser,
   getProfile,
   updateProfile,
+  addAddress,
+  deleteAddress,
   sendVerificationCode,
   verifyVerificationCode,
 } from "../controllers/authController.js";
@@ -19,8 +21,11 @@ const router = express.Router();
 // ======================================================
 
 const verificationCodeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  // Loosened for demo purposes so repeated test registrations / resends
+  // during a walkthrough don't trip the limiter. Tighten this back up
+  // (e.g. windowMs: 15 * 60 * 1000, max: 5) before going to production.
+  windowMs: 5 * 60 * 1000,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -76,6 +81,22 @@ router.patch(
   "/profile",
   authMiddleware,
   updateProfile
+);
+
+// ======================================================
+// SAVED ADDRESSES
+// ======================================================
+
+router.post(
+  "/addresses",
+  authMiddleware,
+  addAddress
+);
+
+router.delete(
+  "/addresses/:addressId",
+  authMiddleware,
+  deleteAddress
 );
 
 export default router;
