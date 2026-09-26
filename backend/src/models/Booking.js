@@ -19,7 +19,12 @@ const bookingSchema = new mongoose.Schema(
       ref: "User",
       required: true,
       index: true,
-    },
+    },offeredTechnicians: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+],
 
     // Selected service
     service: {

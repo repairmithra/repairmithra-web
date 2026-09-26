@@ -20,7 +20,8 @@ export const assignNearestTechnician = async (booking) => {
   try {
     const { start, end } = dayRange(booking.bookingDate);
 
-    // Technicians already assigned to a booking in this date + slot.
+    // Find technicians already assigned to another booking
+    // in the same date and time slot.
     const busyBookings = await Booking.find({
       _id: { $ne: booking._id },
       bookingDate: { $gte: start, $lt: end },
@@ -29,7 +30,9 @@ export const assignNearestTechnician = async (booking) => {
       status: { $nin: ["cancelled"] },
     }).select("technician");
 
-    const busyUserIds = busyBookings.map((b) => b.technician).filter(Boolean);
+    const busyUserIds = busyBookings
+      .map((b) => b.technician)
+      .filter(Boolean);
 
     const excludedUserIds = [
       ...busyUserIds,
@@ -56,28 +59,45 @@ export const assignNearestTechnician = async (booking) => {
       query.user = { $nin: excludedUserIds };
     }
 
-    const nearest = await Technician.findOne(query);
+    // IMPORTANT:
+    // Find ALL eligible technicians instead of only the nearest one.
+    const technicians = await Technician.find(query).select("user");
+    console.log("Eligible technicians found:", technicians.length);
+    console.log("Service being searched:", booking.service);
 
-    if (!nearest) {
-      // No one available right now. Leave the booking unassigned; the
-      // customer sees "We are notifying nearby technicians".
+    if (!technicians.length) {
+      // No eligible technician found.
+      booking.technician = null;
+      booking.offeredTechnicians = [];
+      booking.technicianResponseStatus = null;
+
+      await booking.save();
+
       return booking;
     }
 
-    booking.technician = nearest.user;
+    // Send the same job offer to every eligible technician.
+    const technicianIds = technicians.map((technician) => technician.user);
+
+    booking.technician = null;
+    booking.offeredTechnicians = technicianIds;
     booking.technicianResponseStatus = "pending";
 
     await booking.save();
 
+    console.log(
+      `Job ${booking._id} offered to ${technicianIds.length} technicians`
+    );
+
     return booking;
   } catch (error) {
-    console.error("Technician auto-assignment error:", error);
-    // Never let a matching failure block payment confirmation.
+    console.error("Technician broadcast assignment error:", error);
+
+    // Never let technician matching failure block payment confirmation.
     return booking;
   }
 };
-
-// Re-offers a job to the next nearest technician after a rejection. If no
+  //xt nearest technician after a rejection. If no
 // one else is available, the booking is left unassigned (status stays
 // "confirmed") so it can be retried later or handled by support.
 export const reassignAfterRejection = async (booking) => {

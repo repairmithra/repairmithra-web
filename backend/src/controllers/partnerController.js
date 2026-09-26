@@ -10,7 +10,6 @@ import EmailVerification from "../models/EmailVerification.js";
 
 import generateToken from "../utils/generateToken.js";
 import { isObjectId, isValidLatLng, toCoordinate } from "../utils/validators.js";
-import { reassignAfterRejection } from "../utils/technicianAssignment.js";
 import { sendVerificationEmail } from "../services/emailService.js";
 
 const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "");
@@ -558,10 +557,11 @@ export const getPartnerDashboard = async (req, res) => {
     const [newRequests, acceptedJobs, activeServices, completedJobs, earningsAgg, recentRequests] =
       await Promise.all([
         Booking.countDocuments({
-          technician: technicianUserId,
-          technicianResponseStatus: "pending",
-        }),
-        Booking.countDocuments({
+  offeredTechnicians: technicianUserId,
+  technician: null,
+  technicianResponseStatus: "pending",
+}),
+       Booking.countDocuments({
           technician: technicianUserId,
           technicianResponseStatus: "accepted",
           status: "technician_assigned",
@@ -588,9 +588,10 @@ export const getPartnerDashboard = async (req, res) => {
           { $group: { _id: null, total: { $sum: "$finalRepairAmount" } } },
         ]),
         Booking.find({
-          technician: technicianUserId,
-          technicianResponseStatus: "pending",
-        })
+  offeredTechnicians: technicianUserId,
+  technician: null,
+  technicianResponseStatus: "pending",
+})
           .populate("service", "name slug visitFee")
           .populate("customer", "fullName")
           .sort({ createdAt: -1 })
@@ -637,15 +638,31 @@ export const getPartnerDashboard = async (req, res) => {
 // ======================================================
 
 const STATUS_FILTERS = {
-  new: { technicianResponseStatus: "pending" },
-  accepted: { technicianResponseStatus: "accepted", status: "technician_assigned" },
+  new: {
+    technician: null,
+    technicianResponseStatus: "pending",
+  },
+
+  accepted: {
+    technicianResponseStatus: "accepted",
+    status: "technician_assigned",
+  },
+
   active: {
     technicianResponseStatus: "accepted",
     status: {
-      $in: ["technician_on_the_way", "technician_arrived", "inspection_completed", "repair_in_progress"],
+      $in: [
+        "technician_on_the_way",
+        "technician_arrived",
+        "inspection_completed",
+        "repair_in_progress",
+      ],
     },
   },
-  completed: { status: "completed" },
+
+  completed: {
+    status: "completed",
+  },
 };
 
 export const getPartnerJobs = async (req, res) => {
@@ -654,14 +671,25 @@ export const getPartnerJobs = async (req, res) => {
     const extraFilter = STATUS_FILTERS[filterKey] || {};
 
     const bookings = await Booking.find({
-      technician: req.user._id,
       ...extraFilter,
+      $or: [
+        {
+          offeredTechnicians: req.user._id,
+          technician: null,
+        },
+        {
+          technician: req.user._id,
+        },
+      ],
     })
       .populate("service", "name slug visitFee")
       .populate("customer", "fullName phone")
       .sort({ createdAt: -1 });
 
-    return res.status(200).json({ success: true, bookings });
+    return res.status(200).json({
+      success: true,
+      bookings,
+    });
   } catch (error) {
     console.error("Get partner jobs error:", error);
 
@@ -671,10 +699,6 @@ export const getPartnerJobs = async (req, res) => {
     });
   }
 };
-
-// ======================================================
-// PARTNER JOB DETAILS   (GET /api/partner/jobs/:id)
-// ======================================================
 
 export const getPartnerJobById = async (req, res) => {
   try {
@@ -722,26 +746,46 @@ export const acceptJob = async (req, res) => {
     const { id } = req.params;
 
     if (!isObjectId(id)) {
-      return res.status(404).json({ success: false, message: "Job not found" });
-    }
-
-    const booking = await Booking.findOne({
-      _id: id,
-      technician: req.user._id,
-      technicianResponseStatus: "pending",
-    });
-
-    if (!booking) {
       return res.status(404).json({
         success: false,
-        message: "This request is no longer available",
+        message: "Job not found",
       });
     }
 
-    booking.technicianResponseStatus = "accepted";
-    booking.status = "technician_assigned";
+    // Atomic acceptance:
+    // Only the first eligible partner can claim the booking.
+    const booking = await Booking.findOneAndUpdate(
+      {
+        _id: id,
+        technician: null,
+        status: "confirmed",
+        technicianResponseStatus: "pending",
+        offeredTechnicians: req.user._id,
+      },
+      {
+        $set: {
+          technician: req.user._id,
+          technicianResponseStatus: "accepted",
+          status: "technician_assigned",
+        },
+      },
+      {
+        new: true,
+      }
+    )
+      .populate(
+        "service",
+        "name slug visitFee estimatedCostMin estimatedCostMax"
+      )
+      .populate("customer", "fullName phone");
 
-    await booking.save();
+    if (!booking) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This request is no longer available. Another partner may have accepted it.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -751,7 +795,10 @@ export const acceptJob = async (req, res) => {
   } catch (error) {
     console.error("Accept job error:", error);
 
-    return res.status(500).json({ success: false, message: "Unable to accept job" });
+    return res.status(500).json({
+      success: false,
+      message: "Unable to accept job",
+    });
   }
 };
 
@@ -760,25 +807,40 @@ export const rejectJob = async (req, res) => {
     const { id } = req.params;
 
     if (!isObjectId(id)) {
-      return res.status(404).json({ success: false, message: "Job not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Job not found",
+      });
     }
 
-    const booking = await Booking.findOne({
-      _id: id,
-      technician: req.user._id,
-      technicianResponseStatus: "pending",
-    });
+    // Remove this partner from the broadcast offer.
+    // Other eligible partners can still accept the booking.
+    const booking = await Booking.findOneAndUpdate(
+      {
+        _id: id,
+        technician: null,
+        technicianResponseStatus: "pending",
+        offeredTechnicians: req.user._id,
+      },
+      {
+        $addToSet: {
+          rejectedTechnicians: req.user._id,
+        },
+        $pull: {
+          offeredTechnicians: req.user._id,
+        },
+      },
+      {
+        new: true,
+      }
+    );
 
     if (!booking) {
-      return res.status(404).json({
+      return res.status(409).json({
         success: false,
         message: "This request is no longer available",
       });
     }
-
-    booking.rejectedTechnicians = [...(booking.rejectedTechnicians || []), req.user._id];
-
-    await reassignAfterRejection(booking);
 
     return res.status(200).json({
       success: true,
@@ -787,10 +849,12 @@ export const rejectJob = async (req, res) => {
   } catch (error) {
     console.error("Reject job error:", error);
 
-    return res.status(500).json({ success: false, message: "Unable to decline job" });
+    return res.status(500).json({
+      success: false,
+      message: "Unable to decline job",
+    });
   }
 };
-
 // ======================================================
 // SERVICE FLOW — advance an accepted job through its steps
 // (POST /api/partner/jobs/:id/status)
@@ -811,7 +875,7 @@ const NEXT_STATUS = {
   complete: { from: "repair_in_progress", to: "completed" },
 };
 
-export const updateJobStatus = async (req, res) => {
+ export const updateJobStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { action, amount } = req.body;
@@ -942,3 +1006,9 @@ export const getPartnerEarnings = async (req, res) => {
     });
   }
 };
+
+
+
+  
+
+
