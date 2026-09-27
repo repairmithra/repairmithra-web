@@ -10,12 +10,9 @@ import {
 } from "../controllers/authController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
+import requireRole from "../middleware/requireRole.js";
 
 const router = express.Router();
-
-// ======================================================
-// EMAIL OTP RATE LIMITER
-// ======================================================
 
 const verificationCodeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -24,50 +21,60 @@ const verificationCodeLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
-    message:
-      "Too many verification code requests. Please try again later.",
+    message: "Too many verification code requests. Please try again later.",
   },
 });
 
-// ======================================================
-// REGISTRATION
-// ======================================================
+const verifyCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many verification attempts. Please try again later.",
+  },
+});
 
-// Send email verification code
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  message: {
+    success: false,
+    message: "Too many login attempts. Please try again later.",
+  },
+});
+
 router.post(
   "/send-verification-code",
   verificationCodeLimiter,
   sendVerificationCode
 );
 
-// Verify email verification code
 router.post(
   "/verify-verification-code",
+  verifyCodeLimiter,
   verifyVerificationCode
 );
 
-// Register customer
 router.post(
   "/register",
   registerUser
 );
 
-// ======================================================
-// LOGIN
-// ======================================================
-
 router.post(
   "/login",
+  loginLimiter,
   loginUser
 );
-
-// ======================================================
-// PROFILE
-// ======================================================
 
 router.get(
   "/profile",
   authMiddleware,
+  requireRole("customer"),
   getProfile
 );
 

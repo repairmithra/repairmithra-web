@@ -3,6 +3,7 @@ import Razorpay from "razorpay";
 import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import Service from "../models/Service.js";
+import logger from "../utils/logger.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -185,6 +186,12 @@ export const createPaymentOrder = async (req, res) => {
       payment.status = "failed";
       await payment.save();
 
+      logger.securityEvent("payment_verification_failed", {
+        bookingId,
+        customerId: req.user?._id,
+        reason: "signature_mismatch",
+      });
+
       return res.status(400).json({
         success: false,
         message: "Invalid payment signature",
@@ -232,7 +239,11 @@ export const createPaymentOrder = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Verify payment error:", error);
+    logger.error("payment_verification_exception", {
+      bookingId: req.body?.bookingId,
+      userId: req.user?._id,
+      message: error?.message,
+    });
 
     return res.status(500).json({
       success: false,
