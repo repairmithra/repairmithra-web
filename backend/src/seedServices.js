@@ -54,7 +54,7 @@ const services = [
     estimatedCostMax: 25000,
   },
   {
-    name: "Civil Repair",
+    name: "Civil(Mestri) Repair",
     slug: "civil-repair",
     description:
       "Civil repair services including wall cracks, plaster repair, masonry, cement work and minor construction repairs.",

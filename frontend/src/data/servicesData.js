@@ -12,16 +12,17 @@ import {
   LuZap,
 } from "react-icons/lu";
 
+import mobileImage from "../assets/images/services/laptop-mobile.jpg";
+import tvImage from "../assets/images/services/tv.jpg";
 import acImage from "../assets/images/services/ac.jpg";
 import electricalImage from "../assets/images/services/electrical.jpg";
 import plumbingImage from "../assets/images/services/plumbing.jpg";
-import mobileImage from "../assets/images/services/laptop-mobile.jpg";
 import wallPaintingImage from "../assets/images/services/wall-painting.jpg";
 import civilRepairImage from "../assets/images/services/civil-repair.jpg";
 import fanImage from "../assets/images/services/fan.jpg";
 import fridgeImage from "../assets/images/services/fridge.jpg";
 import washingImage from "../assets/images/services/washing.jpg";
-import tvImage from "../assets/images/services/tv.svg";
+
 
 // ---------------------------------------------------------------------------
 // Services — how the site shows them.
@@ -52,6 +53,93 @@ import tvImage from "../assets/images/services/tv.svg";
 // ---------------------------------------------------------------------------
 
 const PRESENTATION = {
+  "mobile-laptop-repair": {
+    icon: LuMonitorSmartphone,
+    image: mobileImage,
+    tone: "bg-violet-50 text-violet-600",
+    tagline: "Screens, batteries and software fixed fast.",
+    description: "Screen, battery, charging and software repair for phones and laptops.",
+    issueLabel: "Mobile & Laptop",
+    issues: [
+      "Cracked screen",
+      "Battery draining fast",
+      "Charging port problems",
+      "Slow or hanging device",
+      "Virus and software issues",
+    ],
+    keywords: ["phone", "mobile", "laptop", "computer", "macbook", "android", "iphone"],
+    aliases: ["laptop-repair", "mobile-repair"],
+  },
+
+  "tv-repair": {
+    icon: LuTv,
+    image: tvImage,
+    tone: "bg-indigo-50 text-indigo-600",
+    tagline: "Clear picture and sound, back on your screen.",
+    description: "Display, sound, power and port problems on LED and smart TVs.",
+    issueLabel: "TV",
+    issues: [
+      "No power or won't turn on",
+      "Screen lines or flickering",
+      "No sound or distorted audio",
+      "HDMI and port problems",
+      "Wall mounting",
+    ],
+    keywords: ["television", "led", "lcd", "smart tv", "display", "screen"],
+  },
+
+  "civil-repair": {
+    icon: LuBrickWall,
+    image: civilRepairImage,
+    tone: "bg-orange-50 text-orange-600",
+    tagline: "Strong, tidy repairs for cracks, plaster and masonry.",
+    description: "Wall cracks, plaster repair, masonry and minor construction work.",
+    issueLabel: "Civil (Mestri)",
+    issues: [
+      "Wall cracks and seepage",
+      "Plaster and putty repair",
+      "Masonry and cement work",
+      "Tile and flooring repair",
+      "Minor construction repairs",
+    ],
+    keywords: ["mason", "masonry", "crack", "plaster", "cement", "tiles", "construction", "civil"],
+  },
+
+  "wall-painting": {
+    icon: LuPaintRoller,
+    image: wallPaintingImage,
+    tone: "bg-rose-50 text-rose-600",
+    tagline: "Fresh, clean walls for every room.",
+    description: "Interior wall painting, repainting, touch-ups and putty work.",
+    issueLabel: "Wall",
+    issues: [
+      "Interior wall painting",
+      "Repainting and touch-ups",
+      "Damp and peeling patches",
+      "Putty and surface preparation",
+      "Texture and accent walls",
+    ],
+    keywords: ["paint", "painter", "painting", "repaint", "putty", "colour", "color", "interior"],
+  },
+
+  "plumbing-services": {
+    icon: LuDroplets,
+    image: plumbingImage,
+    tone: "bg-emerald-50 text-emerald-600",
+    tagline: "Leaks fixed and fittings sorted, first time.",
+    description: "Leakage repair, pipe fitting, drainage and bathroom plumbing.",
+    issueLabel: "Plumbing",
+    issues: [
+      "Tap and pipe leakage",
+      "Blocked drains",
+      "Toilet and flush repair",
+      "Water tank and motor issues",
+      "Bathroom fittings",
+    ],
+    keywords: ["plumber", "leak", "tap", "pipe", "bathroom", "drain", "tank"],
+    aliases: ["plumbing"],
+  },
+
   "ac-repair": {
     icon: LuAirVent,
     image: acImage,
@@ -84,23 +172,6 @@ const PRESENTATION = {
       "Wobbling or loose blades",
     ],
     keywords: ["ceiling fan", "table fan", "exhaust fan", "regulator", "capacitor"],
-  },
-
-  "tv-repair": {
-    icon: LuTv,
-    image: tvImage,
-    tone: "bg-indigo-50 text-indigo-600",
-    tagline: "Clear picture and sound, back on your screen.",
-    description: "Display, sound, power and port problems on LED and smart TVs.",
-    issueLabel: "TV",
-    issues: [
-      "No power or won't turn on",
-      "Screen lines or flickering",
-      "No sound or distorted audio",
-      "HDMI and port problems",
-      "Wall mounting",
-    ],
-    keywords: ["television", "led", "lcd", "smart tv", "display", "screen"],
   },
 
   "refrigerator-repair": {
@@ -153,76 +224,6 @@ const PRESENTATION = {
     ],
     keywords: ["electrician", "wiring", "switch", "light", "inverter", "mcb"],
     aliases: ["electrical"],
-  },
-
-  "plumbing-services": {
-    icon: LuDroplets,
-    image: plumbingImage,
-    tone: "bg-emerald-50 text-emerald-600",
-    tagline: "Leaks fixed and fittings sorted, first time.",
-    description: "Leakage repair, pipe fitting, drainage and bathroom plumbing.",
-    issueLabel: "Plumbing",
-    issues: [
-      "Tap and pipe leakage",
-      "Blocked drains",
-      "Toilet and flush repair",
-      "Water tank and motor issues",
-      "Bathroom fittings",
-    ],
-    keywords: ["plumber", "leak", "tap", "pipe", "bathroom", "drain", "tank"],
-    aliases: ["plumbing"],
-  },
-
-  "mobile-laptop-repair": {
-    icon: LuMonitorSmartphone,
-    image: mobileImage,
-    tone: "bg-violet-50 text-violet-600",
-    tagline: "Screens, batteries and software fixed fast.",
-    description: "Screen, battery, charging and software repair for phones and laptops.",
-    issueLabel: "Mobile & Laptop",
-    issues: [
-      "Cracked screen",
-      "Battery draining fast",
-      "Charging port problems",
-      "Slow or hanging device",
-      "Virus and software issues",
-    ],
-    keywords: ["phone", "mobile", "laptop", "computer", "macbook", "android", "iphone"],
-    aliases: ["laptop-repair", "mobile-repair"],
-  },
-
-  "wall-painting": {
-    icon: LuPaintRoller,
-    image: wallPaintingImage,
-    tone: "bg-rose-50 text-rose-600",
-    tagline: "Fresh, clean walls for every room.",
-    description: "Interior wall painting, repainting, touch-ups and putty work.",
-    issueLabel: "Wall",
-    issues: [
-      "Interior wall painting",
-      "Repainting and touch-ups",
-      "Damp and peeling patches",
-      "Putty and surface preparation",
-      "Texture and accent walls",
-    ],
-    keywords: ["paint", "painter", "painting", "repaint", "putty", "colour", "color", "interior"],
-  },
-
-  "civil-repair": {
-    icon: LuBrickWall,
-    image: civilRepairImage,
-    tone: "bg-orange-50 text-orange-600",
-    tagline: "Strong, tidy repairs for cracks, plaster and masonry.",
-    description: "Wall cracks, plaster repair, masonry and minor construction work.",
-    issueLabel: "Civil",
-    issues: [
-      "Wall cracks and seepage",
-      "Plaster and putty repair",
-      "Masonry and cement work",
-      "Tile and flooring repair",
-      "Minor construction repairs",
-    ],
-    keywords: ["mason", "masonry", "crack", "plaster", "cement", "tiles", "construction", "civil"],
   },
 };
 

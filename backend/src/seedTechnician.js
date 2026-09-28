@@ -103,7 +103,7 @@ const seedTechnician = async () => {
     console.log("   Name: Test Technician");
     console.log("   Email: technician@repairmithra.com");
     console.log(
-      "   Services: AC Repair, Wall Painting, Civil Repair"
+      "   Services: AC Repair, Wall Painting, Civil(Mestri) Repair"
     );
     console.log("   Radius: 20 km");
     console.log(
