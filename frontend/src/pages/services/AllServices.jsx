@@ -178,23 +178,34 @@ function AllServices() {
                     className="group flex h-full flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-center shadow-sm transition-colors hover:border-green-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
                   >
                     {service.image ? (
-                      <span className="relative h-24 w-full overflow-hidden bg-slate-100">
-                        {/* Soft blurred backdrop so the frame is always filled */}
-                        <img
-                          src={service.image}
-                          alt=""
-                          aria-hidden="true"
-                          className="absolute inset-0 h-full w-full scale-110 object-cover object-center blur-xl opacity-50"
-                        />
-                        {/* Full, uncropped image on top */}
-                        <img
-                          src={service.image}
-                          alt={service.title}
-                          className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
-                          loading="lazy"
-                        />
-                        <span className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                      </span>
+                      <span className="relative h-40 w-full overflow-hidden bg-slate-100">
+  {/* Soft blurred backdrop */}
+  <img
+    src={service.image}
+    alt=""
+    aria-hidden="true"
+    className="absolute inset-0 h-full w-full scale-110 object-cover object-center blur-xl opacity-50"
+  />
+
+  {/* Main image */}
+  <img
+    src={service.image}
+    alt={service.title}
+    className="
+      relative
+      h-full
+      w-full
+      object-cover
+      object-center
+      transition-transform
+      duration-500
+      group-hover:scale-105
+    "
+    loading="lazy"
+  />
+
+  <span className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+</span>
                     ) : (
                       <span
                         className={`flex h-24 w-full items-center justify-center ${service.tone}`}

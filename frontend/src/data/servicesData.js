@@ -94,7 +94,7 @@ const PRESENTATION = {
     tone: "bg-orange-50 text-orange-600",
     tagline: "Strong, tidy repairs for cracks, plaster and masonry.",
     description: "Wall cracks, plaster repair, masonry and minor construction work.",
-    issueLabel: "Civil (Mestri)",
+    issueLabel: "Civil",
     issues: [
       "Wall cracks and seepage",
       "Plaster and putty repair",
