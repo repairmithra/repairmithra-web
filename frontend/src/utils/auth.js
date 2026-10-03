@@ -83,3 +83,6 @@ export function useAuth() {
 
   return { isLoggedIn: Boolean(token), token, user };
 }
+export const isTechnician = (user) => {
+  return user?.role === "technician";
+};
