@@ -23,7 +23,6 @@ function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("");
 
-  // Updates automatically when the user logs in or out
   const { isLoggedIn, user } = useAuth();
   const initial = (user?.fullName || "?").trim().charAt(0).toUpperCase();
   const partner = isTechnician(user);
@@ -54,8 +53,8 @@ function Navbar() {
           {/* Location Selector */}
           <LocationSelector
             className="hidden lg:block w-52 shrink-0"
-            selected={selectedLocation}
-            onSelect={setSelectedLocation}
+            value={selectedLocation}
+            onChange={setSelectedLocation}
           />
 
           {/* Desktop Navigation */}
@@ -91,6 +90,7 @@ function Navbar() {
                   Join as Partner
                 </button>
 
+                {/* Login */}
                 <button
                   onClick={() => navigate("/login")}
                   className="
@@ -131,9 +131,7 @@ function Navbar() {
                   <FiBell size={20} />
                 </button>
 
-                {/* Profile chip — avatar + name, links to /profile (or the
-                    partner dashboard for a technician account). Logout lives
-                    inside that page, not here. */}
+                {/* Profile */}
                 <button
                   onClick={() => navigate(accountPath)}
                   aria-label="Go to account"
@@ -147,19 +145,32 @@ function Navbar() {
                   >
                     {initial}
                   </span>
+
                   <span className="hidden text-left lg:block">
                     <span className="block max-w-[9rem] truncate text-sm font-semibold leading-tight text-slate-900">
                       {user?.fullName || "My Account"}
                     </span>
-                    <span className={`block text-xs font-medium leading-tight ${partner ? "text-emerald-600" : "text-sky-600"}`}>
-                      {partner ? "RepairMithra Partner" : user?.isVerified ? "Verified Customer" : "Customer"}
+
+                    <span
+                      className={`block text-xs font-medium leading-tight ${
+                        partner ? "text-emerald-600" : "text-sky-600"
+                      }`}
+                    >
+                      {partner
+                        ? "RepairMithra Partner"
+                        : user?.isVerified
+                        ? "Verified Customer"
+                        : "Customer"}
                     </span>
                   </span>
-                  <FiChevronDown size={16} className="hidden text-slate-400 xl:block" />
+
+                  <FiChevronDown
+                    size={16}
+                    className="hidden text-slate-400 xl:block"
+                  />
                 </button>
               </>
             )}
-
           </div>
 
           {/* Mobile Menu Button */}
@@ -170,7 +181,6 @@ function Navbar() {
           >
             <FiMenu size={28} />
           </button>
-
         </div>
       </header>
 

@@ -54,7 +54,7 @@ function Footer() {
 
                 <FiPhone className="text-blue-400" />
 
-                +91 XXXXX XXXXX
+                +91 7416930076
 
               </div>
 
@@ -96,15 +96,15 @@ function Footer() {
 
             <ul className="space-y-3 text-slate-300">
 
-              {services.map((service) => (
-                <li
-                  key={service.slug}
-                  className="cursor-pointer hover:text-blue-400 transition"
-                  onClick={() => navigate(`/services/${service.slug}`)}
-                >
-                  {service.title}
-                </li>
-              ))}
+              {services.slice(0, 4).map((service) => (
+  <li
+    key={service.slug}
+    className="cursor-pointer hover:text-blue-400 transition"
+    onClick={() => navigate(`/services/${service.slug}`)}
+  >
+    {service.title}
+  </li>
+))}
 
             </ul>
 
