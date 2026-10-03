@@ -1,192 +1,312 @@
-import { useState, useRef, useEffect } from "react";
-import { FiMapPin, FiSearch } from "react-icons/fi";
+import { useEffect, useState } from "react";
+import { FiLoader, FiMapPin, FiSearch } from "react-icons/fi";
 
-// Comprehensive suggestion list — all Telangana districts (primary service
-// area) plus every major Indian city / state capital. The user can still
-// type and use ANY location beyond this list too (see "Use '...'" option).
+const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";
+
+/*
+ * Keep this export because MobileMenu.jsx may import LOCATIONS.
+ * These are only fallback/popular locations.
+ *
+ * The actual search is dynamic and does NOT depend on this list.
+ */
 export const LOCATIONS = [
-  // Telangana — all 33 districts
-  "Adilabad, Telangana",
-  "Bhadradri Kothagudem, Telangana",
   "Hyderabad, Telangana",
-  "Jagtial, Telangana",
   "Jangaon, Telangana",
-  "Jayashankar Bhupalpally, Telangana",
-  "Jogulamba Gadwal, Telangana",
-  "Kamareddy, Telangana",
-  "Karimnagar, Telangana",
-  "Khammam, Telangana",
-  "Komaram Bheem Asifabad, Telangana",
-  "Mahabubabad, Telangana",
-  "Mahabubnagar, Telangana",
-  "Mancherial, Telangana",
-  "Medak, Telangana",
-  "Medchal-Malkajgiri, Telangana",
-  "Mulugu, Telangana",
-  "Nagarkurnool, Telangana",
-  "Nalgonda, Telangana",
-  "Narayanpet, Telangana",
-  "Nirmal, Telangana",
-  "Nizamabad, Telangana",
-  "Peddapalli, Telangana",
-  "Rajanna Sircilla, Telangana",
-  "Ranga Reddy, Telangana",
-  "Sangareddy, Telangana",
-  "Siddipet, Telangana",
-  "Suryapet, Telangana",
-  "Vikarabad, Telangana",
-  "Wanaparthy, Telangana",
-  "Warangal, Telangana",
-  "Hanumakonda, Telangana",
-  "Yadadri Bhuvanagiri, Telangana",
-  "Secunderabad, Telangana",
-
-  // Andhra Pradesh
-  "Visakhapatnam, Andhra Pradesh",
-  "Vijayawada, Andhra Pradesh",
-  "Guntur, Andhra Pradesh",
-  "Tirupati, Andhra Pradesh",
-  "Nellore, Andhra Pradesh",
-  "Kurnool, Andhra Pradesh",
-  "Amaravati, Andhra Pradesh",
-
-  // Other major Indian cities / state capitals
-  "Delhi",
-  "Mumbai, Maharashtra",
-  "Pune, Maharashtra",
-  "Nagpur, Maharashtra",
-  "Bengaluru, Karnataka",
-  "Mysuru, Karnataka",
-  "Chennai, Tamil Nadu",
-  "Coimbatore, Tamil Nadu",
-  "Madurai, Tamil Nadu",
-  "Kolkata, West Bengal",
-  "Ahmedabad, Gujarat",
-  "Surat, Gujarat",
-  "Vadodara, Gujarat",
-  "Jaipur, Rajasthan",
-  "Udaipur, Rajasthan",
-  "Lucknow, Uttar Pradesh",
-  "Kanpur, Uttar Pradesh",
-  "Noida, Uttar Pradesh",
   "Gurugram, Haryana",
-  "Chandigarh",
-  "Bhopal, Madhya Pradesh",
-  "Indore, Madhya Pradesh",
-  "Patna, Bihar",
-  "Ranchi, Jharkhand",
-  "Bhubaneswar, Odisha",
-  "Raipur, Chhattisgarh",
-  "Guwahati, Assam",
-  "Thiruvananthapuram, Kerala",
-  "Kochi, Kerala",
-  "Kozhikode, Kerala",
-  "Panaji, Goa",
-  "Dehradun, Uttarakhand",
-  "Shimla, Himachal Pradesh",
-  "Srinagar, Jammu & Kashmir",
-  "Jammu, Jammu & Kashmir",
+  "Delhi",
+  "Bengaluru, Karnataka",
 ];
-
-function LocationSelector({ className = "", selected, onSelect }) {
+function LocationSelector({ value, onChange, className = "" }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const inputRef = useRef(null);
+  const [query, setQuery] = useState(value || "");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Keep the input showing the confirmed selection whenever it's not being edited
+  /*
+   * Keep the input synchronized if the selected location
+   * changes from outside this component.
+   */
   useEffect(() => {
-  if (!open && selected) {
-    setQuery(selected);
-  }
-}, [selected, open]);
+    setQuery(value || "");
+  }, [value]);
 
-  const filtered =
-    query.trim() === ""
-      ? LOCATIONS
-      : LOCATIONS.filter((city) =>
-          city.toLowerCase().includes(query.trim().toLowerCase())
+  /*
+   * Dynamic location search
+   */
+  useEffect(() => {
+    if (!open || query.trim().length < 3) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const timer = setTimeout(async () => {
+      try {
+        setLoading(true);
+
+        const params = new URLSearchParams({
+          q: `${query.trim()}, India`,
+          format: "jsonv2",
+          addressdetails: "1",
+          limit: "25",
+          countrycodes: "in",
+          "accept-language": "en",
+        });
+
+        const response = await fetch(
+          `${NOMINATIM_API}?${params.toString()}`,
+          {
+            signal: controller.signal,
+            headers: {
+              Accept: "application/json",
+            },
+          }
         );
 
-  const commitSelection = (value) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    onSelect(trimmed);
-    setQuery(trimmed);
+        if (!response.ok) {
+          throw new Error(
+            `Location search failed: ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+
+        setResults(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error("Location search error:", error);
+          setResults([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 700);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, open]);
+
+  /*
+   * Select a location from search results
+   */
+  const selectLocation = (location) => {
+    const address = location.address || {};
+
+    const locality =
+      address.neighbourhood ||
+      address.suburb ||
+      address.quarter ||
+      address.village ||
+      address.town ||
+      address.city_district ||
+      address.city ||
+      "";
+
+    const district =
+      address.state_district ||
+      address.district ||
+      "";
+
+    const city =
+      address.city ||
+      address.town ||
+      address.village ||
+      "";
+
+    const state = address.state || "";
+
+    const postcode = address.postcode || "";
+
+    /*
+     * Build a clean selected location.
+     */
+    const parts = [
+      locality,
+      city !== locality ? city : "",
+      district,
+      state,
+      postcode,
+    ].filter(Boolean);
+
+    const finalLocation =
+      parts.length > 0
+        ? [...new Set(parts)].join(", ")
+        : location.display_name;
+
+    setQuery(finalLocation);
+
+    if (onChange) {
+      onChange(finalLocation);
+    }
+
     setOpen(false);
-    inputRef.current?.blur();
+    setResults([]);
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    commitSelection(query);
+  /*
+   * Allow customer to manually use entered text
+   * if no result is found.
+   */
+  const useManualLocation = () => {
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    if (onChange) {
+      onChange(trimmed);
+    }
+
+    setOpen(false);
+    setResults([]);
   };
 
   return (
     <div className={`relative ${className}`}>
-      <form
-        onSubmit={handleSubmit}
-        className="flex w-full items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 transition focus-within:border-blue-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100"
+      {/* Location button */}
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300"
       >
-        <FiMapPin className="shrink-0 text-lg text-blue-600" />
+        <FiMapPin className="shrink-0 text-slate-500" />
 
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onFocus={() => setOpen(true)}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          placeholder="Search any location..."
-          className="w-full min-w-0 bg-transparent text-sm text-slate-700 placeholder:text-gray-400 focus:outline-none"
-        />
+        <span className="truncate text-sm text-slate-700">
+          {value || "Select your location"}
+        </span>
+      </button>
 
-        <FiSearch className="shrink-0 text-sm text-gray-400" />
-      </form>
-
+      {/* Search dropdown */}
       {open && (
-        <>
-          {/* Backdrop to close on outside click */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          {/* Search input */}
+          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+            <FiSearch className="shrink-0 text-slate-400" />
 
-          <div className="absolute top-full left-0 z-50 mt-2 max-h-72 w-64 overflow-y-auto rounded-2xl border border-gray-100 bg-white shadow-2xl">
-            {filtered.length > 0 ? (
-              filtered.map((city) => (
-                <button
-                  key={city}
-                  type="button"
-                  onClick={() => commitSelection(city)}
-                  className={`flex w-full items-center gap-3 p-3 text-left text-sm transition hover:bg-blue-50 ${
-                    selected === city ? "bg-blue-50 font-semibold text-blue-600" : "text-slate-700"
-                  }`}
-                >
-                  <FiMapPin className="shrink-0 text-blue-600" />
-                  <span className="truncate">{city}</span>
-                </button>
-              ))
-            ) : null}
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search area, village, city, sector or PIN..."
+              className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+            />
 
-            {/* Always let them use exactly what they typed, even if it's not in the list */}
-            {query.trim() !== "" && !LOCATIONS.some(
-              (c) => c.toLowerCase() === query.trim().toLowerCase()
-            ) && (
-              <button
-                type="button"
-                onClick={() => commitSelection(query)}
-                className="flex w-full items-center gap-3 border-t border-gray-100 p-3 text-left text-sm text-slate-700 transition hover:bg-blue-50"
-              >
-                <FiSearch className="shrink-0 text-blue-600" />
-                <span className="truncate">
-                  Use "<span className="font-semibold">{query.trim()}</span>"
-                </span>
-              </button>
+            {loading && (
+              <FiLoader className="shrink-0 animate-spin text-slate-400" />
             )}
           </div>
-        </>
+
+          {/* Results */}
+          <div className="max-h-96 overflow-y-auto">
+            {results.length > 0 ? (
+              results.map((location) => {
+                const address = location.address || {};
+
+                const locality =
+                  address.neighbourhood ||
+                  address.suburb ||
+                  address.quarter ||
+                  address.village ||
+                  address.town ||
+                  address.city_district ||
+                  address.city ||
+                  location.name ||
+                  "";
+
+                const city =
+                  address.city ||
+                  address.town ||
+                  address.village ||
+                  "";
+
+                const district =
+                  address.state_district ||
+                  address.district ||
+                  "";
+
+                const state = address.state || "";
+
+                const postcode = address.postcode || "";
+
+                const secondaryText = [
+                  city,
+                  district,
+                  state,
+                  postcode,
+                ]
+                  .filter(Boolean)
+                  .filter(
+                    (item, index, array) =>
+                      array.indexOf(item) === index
+                  )
+                  .join(", ");
+
+                return (
+                  <button
+                    key={`${location.place_id}-${location.osm_id}`}
+                    type="button"
+                    onClick={() => selectLocation(location)}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                  >
+                    <FiMapPin className="mt-1 shrink-0 text-blue-500" />
+
+                    <div className="min-w-0 flex-1">
+                      {/* Main location */}
+                      <p className="text-sm font-medium text-slate-800">
+                        {locality || location.display_name}
+                      </p>
+
+                      {/* City / District / State / PIN */}
+                      {secondaryText && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {secondaryText}
+                        </p>
+                      )}
+
+                      {/* Full address */}
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-400">
+                        {location.display_name}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })
+            ) : query.trim().length >= 3 && !loading ? (
+              /* No results */
+              <div className="px-4 py-5">
+                <p className="text-sm text-slate-500">
+                  No matching location found.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={useManualLocation}
+                  className="mt-2 text-sm font-medium text-blue-600 hover:underline"
+                >
+                  Use "{query.trim()}"
+                </button>
+              </div>
+            ) : (
+              /* Initial state */
+              <div className="px-4 py-5">
+                <p className="text-sm text-slate-500">
+                  Search for a location in India.
+                </p>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  Try a city, village, sector, colony, area or PIN
+                  code.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
