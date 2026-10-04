@@ -76,3 +76,31 @@ export const sendVerificationEmail = async (email, otp) => {
     throw error;
   }
 };
+
+export const sendPasswordResetEmail = async (email, otp) => {
+  const { data, error } = await resend.emails.send({
+    from: process.env.EMAIL_FROM,
+    to: [email],
+    subject: "RepairMithra - Password Reset Code",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px;">
+        <h2 style="color: #123B63;">Reset your RepairMithra password</h2>
+        <p>Use the code below to reset your password.</p>
+        <div style="background: #f1f7ff; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #123B63;">${otp}</span>
+        </div>
+        <p>This code will expire in <strong>10 minutes</strong>.</p>
+        <p>If you did not request a password reset, you can safely ignore this email.</p>
+        <hr />
+        <p style="font-size: 12px; color: #777;">This is an automated email from RepairMithra.</p>
+      </div>
+    `,
+  });
+
+  if (error) {
+    console.error("Resend API error:", error);
+    throw new Error(error.message || "Failed to send email");
+  }
+
+  return data;
+};

@@ -10,6 +10,8 @@ import {
   deleteAddress,
   sendVerificationCode,
   verifyVerificationCode,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/authController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
@@ -66,6 +68,10 @@ router.post(
   "/login",
   loginUser
 );
+
+// Forgot / reset password
+router.post("/forgot-password", verificationCodeLimiter, forgotPassword);
+router.post("/reset-password", verificationCodeLimiter, resetPassword);
 
 // ======================================================
 // PROFILE
