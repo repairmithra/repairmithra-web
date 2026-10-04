@@ -3,7 +3,6 @@ import crypto from "crypto";
 import Booking from "../models/Booking.js";
 import Payment from "../models/Payment.js";
 import Service from "../models/Service.js";
-import logger from "../utils/logger.js";
 
 import {
   TIME_SLOTS,
@@ -195,11 +194,7 @@ export const createBooking = async (req, res) => {
       booking,
     });
   } catch (error) {
-    logger.error("booking_create_exception", {
-      userId: req.user?._id,
-      serviceId: req.body?.serviceId,
-      message: error?.message,
-    });
+    console.error("Create booking error:", error);
 
     return res.status(500).json({
       success: false,
@@ -227,10 +222,7 @@ export const getMyBookings = async (req, res) => {
       bookings,
     });
   } catch (error) {
-    logger.error("booking_list_exception", {
-      userId: req.user?._id,
-      message: error?.message,
-    });
+    console.error("List bookings error:", error);
 
     return res.status(500).json({
       success: false,

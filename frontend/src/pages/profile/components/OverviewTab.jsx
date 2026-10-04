@@ -14,16 +14,20 @@ import {
   FiHeadphones,
   FiChevronRight,
   FiHome,
+  FiBriefcase,
+  FiTag,
   FiZap,
   FiPlus,
+  FiTrash2,
 } from "react-icons/fi";
 
 import StatCard from "./StatCard";
 import BookingRow from "./BookingRow";
-import HouseShieldIllustration from "./HouseShieldIllustration";
 import { formatMonthYear, getInitial, isUpcomingStatus } from "../profileUtils";
 
-function OverviewTab({ user, bookings, onEdit, onGoToTab }) {
+const ADDRESS_ICONS = { Home: FiHome, Work: FiBriefcase };
+
+function OverviewTab({ user, bookings, onEdit, onGoToTab, onAddAddress, onDeleteAddress }) {
   const navigate = useNavigate();
 
   const total = bookings.length;
@@ -36,48 +40,72 @@ function OverviewTab({ user, bookings, onEdit, onGoToTab }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile header card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-50 via-blue-50 to-sky-100 p-6 sm:p-8">
-        <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
+      {/* Greeting + profile summary */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        {/* Greeting card */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-50 via-sky-50 to-emerald-50 p-6 sm:p-8 lg:col-span-3">
+          <div className="relative z-10 max-w-sm">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Hello, {firstName}! <span aria-hidden>👋</span>
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Find trusted professionals for all your home repair and maintenance needs.
+            </p>
+          </div>
+
+          {/* Decorative icon cluster */}
+          <div className="pointer-events-none absolute -right-4 -top-4 flex items-center opacity-90 sm:right-4 sm:top-6">
+            <FiHome size={96} className="text-sky-200" />
+            <span className="-ml-8 mt-8 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+              <FiCheckCircle size={20} />
+            </span>
+          </div>
+          <div className="pointer-events-none absolute bottom-3 right-10 rounded-full bg-white/70 p-2 text-sky-500 shadow-sm">
+            <FiTool size={20} />
+          </div>
+        </div>
+
+        {/* Profile summary card */}
+        <div className="rounded-2xl bg-gradient-to-br from-slate-800 to-sky-900 p-6 text-white lg:col-span-2">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-sky-900 text-xl font-bold text-white ring-4 ring-white">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-sky-800 ring-2 ring-white/30">
                 {getInitial(user.fullName)}
               </div>
               <div className="min-w-0">
-                <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">
-                  {user.fullName}
-                </h1>
+                <p className="truncate font-semibold">{user.fullName}</p>
                 {user.isVerified && (
-                  <span className="mt-1 flex w-fit items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                    <FiCheckCircle size={12} /> Verified Customer
+                  <span className="mt-1 flex w-fit items-center gap-1 rounded-full bg-emerald-400/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                    <FiCheckCircle size={11} /> Verified Customer
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-x-8 gap-y-3 text-sm text-gray-600">
-              <p className="flex items-center gap-2">
-                <FiMail size={15} className="shrink-0 text-gray-400" /> {user.email}
-              </p>
-              <p className="flex items-center gap-2">
-                <FiPhone size={15} className="shrink-0 text-gray-400" /> +91 {user.phone}
-              </p>
-              <p className="flex items-center gap-2">
-                <FiCalendar size={15} className="shrink-0 text-gray-400" />
-                Member Since&nbsp;<span className="font-semibold text-gray-800">{formatMonthYear(user.createdAt)}</span>
-              </p>
-            </div>
-
-            <button
-              onClick={onEdit}
-              className="mt-5 flex items-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
-            >
-              <FiEdit2 size={14} /> Edit Profile
-            </button>
+            <span className="shrink-0 rounded-xl bg-white/10 px-3 py-1.5 text-center text-[11px] leading-tight text-sky-100">
+              Member Since
+              <br />
+              <span className="text-xs font-semibold text-white">
+                {formatMonthYear(user.createdAt)}
+              </span>
+            </span>
           </div>
 
-          <HouseShieldIllustration className="hidden w-48 shrink-0 sm:block lg:w-56" />
+          <div className="mt-4 space-y-1.5 text-sm text-sky-100">
+            <p className="flex items-center gap-2 truncate">
+              <FiMail size={14} className="shrink-0" /> {user.email}
+            </p>
+            <p className="flex items-center gap-2">
+              <FiPhone size={14} className="shrink-0" /> +91 {user.phone}
+            </p>
+          </div>
+
+          <button
+            onClick={onEdit}
+            className="mt-4 flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-sky-800 transition hover:bg-sky-50"
+          >
+            <FiEdit2 size={14} /> Edit Profile
+          </button>
         </div>
       </div>
 
@@ -186,8 +214,36 @@ function OverviewTab({ user, bookings, onEdit, onGoToTab }) {
             <FiChevronRight className="mt-1 shrink-0 text-gray-300" size={16} />
           </div>
 
+          {(user.addresses || []).map((addr) => {
+            const Icon = ADDRESS_ICONS[addr.label] || FiTag;
+            return (
+              <div
+                key={addr._id}
+                className="mt-3 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-sky-600">
+                  <Icon size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-900">{addr.label}</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {addr.address}, {addr.pincode}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onDeleteAddress(addr._id)}
+                  aria-label={`Remove ${addr.label} address`}
+                  title="Remove address"
+                  className="mt-1 shrink-0 rounded-lg p-1.5 text-gray-300 transition hover:bg-rose-50 hover:text-rose-500"
+                >
+                  <FiTrash2 size={16} />
+                </button>
+              </div>
+            );
+          })}
+
           <button
-            onClick={onEdit}
+            onClick={onAddAddress}
             className="mt-3 flex w-full items-center gap-3 rounded-xl border border-dashed border-sky-200 bg-sky-50/40 p-4 text-left transition hover:bg-sky-50"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-sky-500">

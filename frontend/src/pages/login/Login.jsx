@@ -3,12 +3,18 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
-import { setSession } from "../../utils/auth";
+import { setSession, getStoredUser, isTechnician } from "../../utils/auth";
 import { API_BASE } from "../../utils/api";
 
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // This browser only has room for one session (one token in localStorage).
+  // If a partner is currently logged in here, logging in as a customer will
+  // replace that session — flag it up front so it doesn't look like a bug.
+  const existingUser = getStoredUser();
+  const switchingFromPartner = isTechnician(existingUser);
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -113,6 +119,16 @@ function Login() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+
+          {switchingFromPartner && (
+            <div className="mb-5 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+              <FiAlertCircle className="mt-0.5 shrink-0" size={16} />
+              <span>
+                You're currently signed in as a partner ({existingUser?.fullName || "this device"}) in this browser.
+                Logging in here will replace that session — use a different browser or a private window to keep both signed in at once.
+              </span>
+            </div>
+          )}
 
           {serverError && (
             <div className="mb-5 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">

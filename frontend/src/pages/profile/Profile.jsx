@@ -11,6 +11,7 @@ import BookingsTab from "./components/BookingsTab";
 import SupportTab from "./components/SupportTab";
 import PlaceholderTab from "./components/PlaceholderTab";
 import EditProfileModal from "./components/EditProfileModal";
+import AddAddressModal from "./components/AddAddressModal";
 
 function Profile() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ function Profile() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [addAddressOpen, setAddAddressOpen] = useState(false);
 
   useEffect(() => {
     if (!getToken()) {
@@ -68,6 +70,38 @@ function Profile() {
     if (token) setSession(token, updatedUser);
   };
 
+  const handleAddressAdded = (updatedUser) => {
+    setUser(updatedUser);
+    setAddAddressOpen(false);
+
+    const token = getToken();
+    if (token) setSession(token, updatedUser);
+  };
+
+  const handleDeleteAddress = async (addressId) => {
+    const previous = user;
+
+    // Optimistic update — feels instant, rolled back below on failure
+    setUser((prev) => ({
+      ...prev,
+      addresses: (prev.addresses || []).filter((a) => a._id !== addressId),
+    }));
+
+    try {
+      const data = await apiFetch(`/api/auth/addresses/${addressId}`, {
+        method: "DELETE",
+        auth: true,
+      });
+
+      setUser(data.data);
+      const token = getToken();
+      if (token) setSession(token, data.data);
+    } catch (err) {
+      console.error("Delete address error:", err);
+      setUser(previous);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-gray-50">
@@ -106,6 +140,8 @@ function Profile() {
               bookings={bookings}
               onEdit={() => setEditOpen(true)}
               onGoToTab={setActiveTab}
+              onAddAddress={() => setAddAddressOpen(true)}
+              onDeleteAddress={handleDeleteAddress}
             />
           )}
 
@@ -158,6 +194,13 @@ function Profile() {
           user={user}
           onClose={() => setEditOpen(false)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {addAddressOpen && (
+        <AddAddressModal
+          onClose={() => setAddAddressOpen(false)}
+          onSaved={handleAddressAdded}
         />
       )}
     </div>

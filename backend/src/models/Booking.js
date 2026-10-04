@@ -1,14 +1,30 @@
 import mongoose from "mongoose";
 
+import { TIME_SLOTS } from "../utils/schedule.js";
+
 const bookingSchema = new mongoose.Schema(
   {
+    // Human-friendly reference shown to the customer, e.g. RM-20260920-K7M2
+    // (sparse so older bookings created before this field still work)
+    bookingCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+
     // Customer who created the booking
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
-    },
+    },offeredTechnicians: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+],
 
     // Selected service
     service: {
@@ -25,10 +41,25 @@ const bookingSchema = new mongoose.Schema(
       trim: true,
     },
 
+    city: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 80,
+    },
+
     pincode: {
       type: String,
       required: true,
       match: /^[0-9]{6}$/,
+    },
+
+    // Optional note from the customer about the problem
+    notes: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 300,
     },
 
     // Customer location
@@ -58,15 +89,10 @@ const bookingSchema = new mongoose.Schema(
     timeSlot: {
       type: String,
       required: true,
-      enum: [
-        "06:00 AM - 10:00 AM",
-        "10:00 AM - 02:00 PM",
-        "02:00 PM - 06:00 PM",
-        "06:00 PM - 10:00 PM",
-      ],
+      enum: TIME_SLOTS,
     },
 
-    // Technician assigned later
+    // Technician assigned later (User account of the technician)
     technician: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -117,6 +143,36 @@ const bookingSchema = new mongoose.Schema(
       type: Number,
       default: null,
       min: 0,
+    },
+
+    // ----------------------------------------------------------------
+    // Partner (technician) workflow
+    // ----------------------------------------------------------------
+
+    // Whether the assigned technician has accepted/rejected this job.
+    // null until a technician is proposed by the auto-assignment system.
+    technicianResponseStatus: {
+      type: String,
+      enum: ["pending", "accepted", "rejected"],
+      default: null,
+      index: true,
+    },
+
+    // Technicians who already rejected this job, so the same job is never
+    // offered to them twice while we look for the next nearest technician.
+    rejectedTechnicians: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    // Customer's rating of the completed job (given from the customer side;
+    // shown on the partner's Earnings/Job Details screens).
+    rating: {
+      score: { type: Number, min: 1, max: 5, default: null },
+      comment: { type: String, trim: true, maxlength: 300, default: "" },
+      ratedAt: { type: Date, default: null },
     },
   },
   {

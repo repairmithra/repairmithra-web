@@ -56,6 +56,43 @@ const technicianSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+
+    // ----------------------------------------------------------------
+    // Partner profile details (collected at registration / editable later)
+    // ----------------------------------------------------------------
+
+    // Free-text service area shown on the partner profile (e.g. "Jangaon,
+    // Telangana"). The actual matching radius uses `location` + `serviceRadiusKm`.
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 100,
+    },
+
+    experienceYears: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 60,
+    },
+
+    bio: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 500,
+    },
+
+    ratingSum: {
+      type: Number,
+      default: 0,
+    },
+
+    ratingCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

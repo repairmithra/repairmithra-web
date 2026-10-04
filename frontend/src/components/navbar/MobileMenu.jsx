@@ -12,11 +12,12 @@ import {
 
 import SearchBar from "./SearchBar";
 import LocationSelector, { LOCATIONS } from "./LocationSelector";
-import { useAuth } from "../../utils/auth";
+import { useAuth, isTechnician } from "../../utils/auth";
 
 function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
   const navigate = useNavigate();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
+  const partner = isTechnician(user);
   const [locationOpen, setLocationOpen] = useState(false);
 
   if (!open) return null;
@@ -139,16 +140,24 @@ function MobileMenu({ open, setOpen, selectedLocation, setSelectedLocation }) {
               <button
                 onClick={() => {
                   setOpen(false);
-                  navigate("/profile");
+                  navigate(partner ? "/partner/dashboard" : "/profile");
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3 text-white font-semibold hover:bg-sky-700 transition"
+                className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-white font-semibold transition ${
+                  partner ? "bg-emerald-600 hover:bg-emerald-700" : "bg-sky-600 hover:bg-sky-700"
+                }`}
               >
                 <FiUser size={18} />
-                Profile
+                {partner ? "Partner Dashboard" : "Profile"}
               </button>
             ) : (
               <>
-                <button className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-sky-600 py-3 text-sky-600 font-semibold hover:bg-sky-50 transition">
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/partner/register");
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-emerald-600 py-3 text-emerald-600 font-semibold hover:bg-emerald-50 transition"
+                >
                   <FiBriefcase size={18} />
                   Join as Partner
                 </button>

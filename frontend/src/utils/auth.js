@@ -83,6 +83,6 @@ export function useAuth() {
 
   return { isLoggedIn: Boolean(token), token, user };
 }
-export const isTechnician = (user) => {
-  return user?.role === "technician";
-};
+
+// True when the logged-in account is a RepairMithra partner (technician).
+export const isTechnician = (user) => user?.role === "technician";

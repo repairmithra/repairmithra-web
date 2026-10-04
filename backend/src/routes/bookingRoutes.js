@@ -7,28 +7,27 @@ import {
 } from "../controllers/bookingController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
-import requireRole from "../middleware/requireRole.js";
 
 const router = express.Router();
 
+// Customer creates a booking
 router.post(
   "/",
   authMiddleware,
-  requireRole("customer"),
   createBooking
 );
 
+// Customer reads all of their own bookings
 router.get(
   "/",
   authMiddleware,
-  requireRole("customer"),
   getMyBookings
 );
 
+// Customer reads one of their own bookings
 router.get(
   "/:id",
   authMiddleware,
-  requireRole("customer"),
   getBookingById
 );
 
