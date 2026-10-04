@@ -4,6 +4,8 @@ import generateToken from "../utils/generateToken.js";
 
 import User from "../models/User.js";
 import EmailVerification from "../models/EmailVerification.js";
+import PasswordReset from "../models/PasswordReset.js";
+import { sendPasswordResetEmail } from "../services/emailService.js";
 
 // ======================================================
 // SEND VERIFICATION CODE
@@ -806,6 +808,207 @@ export const getProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to get profile",
+    });
+  }
+};
+
+// ======================================================
+// FORGOT PASSWORD  (POST /api/auth/forgot-password)
+// Body: { email }. Sends a 6-digit code to the email if an account exists.
+// Always answers with the same message so it can't be used to find out
+// which emails are registered.
+// ======================================================
+
+const hashOtp = (code) =>
+  crypto.createHash("sha256").update(code).digest("hex");
+
+export const forgotPassword = async (req, res) => {
+  const genericResponse = {
+    success: true,
+    message:
+      "If an account exists for this email, a reset code has been sent.",
+  };
+
+  try {
+    const email =
+      typeof req.body.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid email address",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(200).json(genericResponse);
+    }
+
+    const existing = await PasswordReset.findOne({ email });
+
+    if (existing) {
+      const cooldown = 60 * 1000;
+      const sinceLast = Date.now() - new Date(existing.lastSentAt).getTime();
+
+      if (sinceLast < cooldown) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${Math.ceil(
+            (cooldown - sinceLast) / 1000
+          )} seconds before requesting another code.`,
+        });
+      }
+    }
+
+    const code = crypto.randomInt(100000, 1000000).toString();
+
+    await PasswordReset.findOneAndUpdate(
+      { email },
+      {
+        email,
+        otpHash: hashOtp(code),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0,
+        lastSentAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // DEVELOPMENT ONLY: print the code instead of e-mailing it
+    if (
+      process.env.DEV_LOG_OTP === "true" &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      console.log(`🔑 [DEV] Password reset code for ${email}: ${code}`);
+      return res.status(200).json({ ...genericResponse, devOtp: code });
+    }
+
+    try {
+      await sendPasswordResetEmail(email, code);
+    } catch (mailError) {
+      console.error("Forgot password email error:", mailError);
+      await PasswordReset.deleteOne({ email });
+      return res.status(500).json({
+        success: false,
+        message: "Unable to send reset code. Please try again.",
+      });
+    }
+
+    return res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to process request",
+    });
+  }
+};
+
+// ======================================================
+// RESET PASSWORD  (POST /api/auth/reset-password)
+// Body: { email, code, newPassword }
+// ======================================================
+
+export const resetPassword = async (req, res) => {
+  try {
+    const email =
+      typeof req.body.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
+    const code =
+      typeof req.body.code === "string" ? req.body.code.trim() : "";
+    const newPassword =
+      typeof req.body.newPassword === "string" ? req.body.newPassword : "";
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, code and new password are required",
+      });
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({
+        success: false,
+        message: "Code must be 6 digits",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    const reset = await PasswordReset.findOne({ email });
+
+    if (!reset) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset code not found. Please request a new code.",
+      });
+    }
+
+    if (reset.expiresAt < new Date()) {
+      await PasswordReset.deleteOne({ _id: reset._id });
+      return res.status(400).json({
+        success: false,
+        message: "Reset code has expired. Please request a new code.",
+      });
+    }
+
+    if (reset.attempts >= 5) {
+      await PasswordReset.deleteOne({ _id: reset._id });
+      return res.status(429).json({
+        success: false,
+        message: "Too many incorrect attempts. Please request a new code.",
+      });
+    }
+
+    const submitted = Buffer.from(hashOtp(code));
+    const stored = Buffer.from(reset.otpHash);
+
+    if (
+      submitted.length !== stored.length ||
+      !crypto.timingSafeEqual(submitted, stored)
+    ) {
+      reset.attempts += 1;
+      await reset.save();
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reset code",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      await PasswordReset.deleteOne({ _id: reset._id });
+      return res.status(400).json({
+        success: false,
+        message: "Reset code not found. Please request a new code.",
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    await PasswordReset.deleteOne({ _id: reset._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully. Please log in.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to reset password",
     });
   }
 };
