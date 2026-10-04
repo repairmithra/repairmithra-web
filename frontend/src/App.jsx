@@ -6,6 +6,7 @@ import Footer from "./sections/footer/Footer";
 
 import Home from "./pages/home/Home";
 import Login from "./pages/login/Login";
+import ForgotPassword from "./pages/login/ForgotPassword";
 import Registration from "./pages/register/Registration";
 import AllServices from "./pages/services/AllServices";
 import ServiceDetail from "./pages/services/ServiceDetail";
@@ -44,6 +45,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<Registration />} />
         <Route path="/profile" element={<Profile />} />
 
