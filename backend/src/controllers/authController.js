@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import generateToken from "../utils/generateToken.js";
-import logger from "../utils/logger.js";
 
 import User from "../models/User.js";
 import EmailVerification from "../models/EmailVerification.js";
@@ -164,11 +163,10 @@ export const sendVerificationCode = async (req, res) => {
     const resendData = await resendResponse.json();
 
     if (!resendResponse.ok) {
-      logger.securityEvent("otp_send_failed", {
-        email: email,
-        provider: "resend",
-        status: resendResponse.status,
-      });
+      console.error(
+        "Resend email error:",
+        resendData
+      );
 
       return res.status(500).json({
         success: false,
@@ -181,10 +179,10 @@ export const sendVerificationCode = async (req, res) => {
       message: "Verification code sent successfully",
     });
   } catch (error) {
-    logger.error("otp_send_exception", {
-      email: email,
-      message: error?.message,
-    });
+    console.error(
+      "Send verification code error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -281,14 +279,15 @@ export const verifyVerificationCode = async (
       message: "Email verified successfully",
     });
   } catch (error) {
-    logger.error("otp_verification_exception", {
-      email: email,
-      message: error?.message,
-    });
+    console.error(
+      "Verify verification code error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Unable to verify verification code",
+      message:
+        "Unable to verify verification code",
     });
   }
 };
@@ -441,11 +440,6 @@ export const registerUser = async (req, res) => {
 
       await verification.save();
 
-      logger.securityEvent("registration_otp_failed", {
-        email,
-        attempts: verification.attempts,
-      });
-
       return res.status(400).json({
         success: false,
         message: "Invalid verification code",
@@ -488,10 +482,10 @@ export const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error("register_user_exception", {
-      email: email,
-      message: error?.message,
-    });
+    console.error(
+      "Register user error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -522,14 +516,10 @@ export const loginUser = async (req, res) => {
       await User.findOne({ email });
 
     if (!user) {
-      logger.securityEvent("login_failed", {
-        email,
-        reason: "user_not_found",
-      });
-
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password",
+        message:
+          "Invalid email or password",
       });
     }
 
@@ -540,14 +530,10 @@ export const loginUser = async (req, res) => {
       );
 
     if (!isPasswordValid) {
-      logger.securityEvent("login_failed", {
-        email,
-        reason: "invalid_password",
-      });
-
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password",
+        message:
+          "Invalid email or password",
       });
     }
 
@@ -573,10 +559,10 @@ export const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error("login_exception", {
-      email: email,
-      message: error?.message,
-    });
+    console.error(
+      "Login error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
