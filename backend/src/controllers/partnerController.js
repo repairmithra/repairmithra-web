@@ -7,10 +7,11 @@ import Service from "../models/Service.js";
 import Booking from "../models/Booking.js";
 import Payment from "../models/Payment.js";
 import EmailVerification from "../models/EmailVerification.js";
+import PasswordReset from "../models/PasswordReset.js";
 
 import generateToken from "../utils/generateToken.js";
 import { isObjectId, isValidLatLng, toCoordinate } from "../utils/validators.js";
-import { sendVerificationEmail } from "../services/emailService.js";
+import { sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
 
 const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "");
 
@@ -423,6 +424,206 @@ export const loginPartner = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to login",
+    });
+  }
+};
+
+// ======================================================
+// PARTNER FORGOT PASSWORD   (POST /api/partner/forgot-password)
+// Body: { identifier }  — the partner's registered email or mobile number.
+// Sends a 6-digit code to the partner's account email. Only accounts with
+// role "technician" are eligible. Always answers with the same message so it
+// can't be used to find out which emails / numbers are registered.
+// ======================================================
+
+const hashResetCode = (code) =>
+  crypto.createHash("sha256").update(code).digest("hex");
+
+const findPartnerUser = (identifier) =>
+  User.findOne({
+    role: "technician",
+    $or: [{ email: identifier }, { phone: identifier }],
+  });
+
+export const forgotPartnerPassword = async (req, res) => {
+  const genericResponse = {
+    success: true,
+    message:
+      "If a partner account exists for this email or mobile number, a reset code has been sent to its registered email.",
+  };
+
+  try {
+    const identifier = asTrimmedString(req.body.identifier).toLowerCase();
+
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter your registered email or mobile number",
+      });
+    }
+
+    const user = await findPartnerUser(identifier);
+
+    if (!user) {
+      return res.status(200).json(genericResponse);
+    }
+
+    const email = user.email.toLowerCase();
+    const existing = await PasswordReset.findOne({ email });
+
+    if (existing) {
+      const cooldown = 60 * 1000;
+      const sinceLast = Date.now() - new Date(existing.lastSentAt).getTime();
+
+      if (sinceLast < cooldown) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${Math.ceil(
+            (cooldown - sinceLast) / 1000
+          )} seconds before requesting another code.`,
+        });
+      }
+    }
+
+    const code = crypto.randomInt(100000, 1000000).toString();
+
+    await PasswordReset.findOneAndUpdate(
+      { email },
+      {
+        email,
+        otpHash: hashResetCode(code),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0,
+        lastSentAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // DEVELOPMENT ONLY: print the code instead of e-mailing it
+    if (
+      process.env.DEV_LOG_OTP === "true" &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      console.log(`🔑 [DEV] Partner password reset code for ${email}: ${code}`);
+      return res.status(200).json({ ...genericResponse, devOtp: code });
+    }
+
+    try {
+      await sendPasswordResetEmail(email, code);
+    } catch (mailError) {
+      console.error("Partner forgot password email error:", mailError);
+      await PasswordReset.deleteOne({ email });
+      return res.status(500).json({
+        success: false,
+        message: "Unable to send reset code. Please try again.",
+      });
+    }
+
+    return res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error("Partner forgot password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to process request",
+    });
+  }
+};
+
+// ======================================================
+// PARTNER RESET PASSWORD   (POST /api/partner/reset-password)
+// Body: { identifier, code, newPassword }
+// ======================================================
+
+export const resetPartnerPassword = async (req, res) => {
+  try {
+    const identifier = asTrimmedString(req.body.identifier).toLowerCase();
+    const code = asTrimmedString(req.body.code);
+    const newPassword =
+      typeof req.body.newPassword === "string" ? req.body.newPassword : "";
+
+    if (!identifier || !code || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or mobile, code and new password are required",
+      });
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({
+        success: false,
+        message: "Code must be 6 digits",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    const user = await findPartnerUser(identifier);
+    const notFound = {
+      success: false,
+      message: "Reset code not found. Please request a new code.",
+    };
+
+    if (!user) {
+      return res.status(400).json(notFound);
+    }
+
+    const email = user.email.toLowerCase();
+    const reset = await PasswordReset.findOne({ email });
+
+    if (!reset) {
+      return res.status(400).json(notFound);
+    }
+
+    if (reset.expiresAt < new Date()) {
+      await PasswordReset.deleteOne({ _id: reset._id });
+      return res.status(400).json({
+        success: false,
+        message: "Reset code has expired. Please request a new code.",
+      });
+    }
+
+    if (reset.attempts >= 5) {
+      await PasswordReset.deleteOne({ _id: reset._id });
+      return res.status(429).json({
+        success: false,
+        message: "Too many incorrect attempts. Please request a new code.",
+      });
+    }
+
+    const submitted = Buffer.from(hashResetCode(code));
+    const stored = Buffer.from(reset.otpHash);
+
+    if (
+      submitted.length !== stored.length ||
+      !crypto.timingSafeEqual(submitted, stored)
+    ) {
+      reset.attempts += 1;
+      await reset.save();
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reset code",
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    await PasswordReset.deleteOne({ _id: reset._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully. Please log in.",
+    });
+  } catch (error) {
+    console.error("Partner reset password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to reset password",
     });
   }
 };
@@ -1006,9 +1207,3 @@ export const getPartnerEarnings = async (req, res) => {
     });
   }
 };
-
-
-
-  
-
-

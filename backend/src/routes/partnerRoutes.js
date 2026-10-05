@@ -6,6 +6,8 @@ import {
   verifyPartnerOtp,
   registerPartner,
   loginPartner,
+  forgotPartnerPassword,
+  resetPartnerPassword,
   getPartnerProfile,
   updatePartnerProfile,
   getPartnerDashboard,
@@ -47,6 +49,10 @@ router.post("/register", registerPartner);
 // LOGIN (Step 4)
 // ======================================================
 router.post("/login", loginPartner);
+
+// Forgot / reset password (partners only)
+router.post("/forgot-password", otpLimiter, forgotPartnerPassword);
+router.post("/reset-password", otpLimiter, resetPartnerPassword);
 
 // Everything below requires a logged-in partner (technician) account
 router.use(authMiddleware, technicianMiddleware);

@@ -31,8 +31,8 @@ const services = [
     description:
       "Professional priest and purohit services for poojas, ceremonies, housewarming and religious occasions.",
     visitFee: 200,
-    estimatedCostMin: 500,
-    estimatedCostMax: 15000,
+    estimatedCostMin: 0,
+    estimatedCostMax: 0,
   },
 
   {
