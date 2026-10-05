@@ -16,6 +16,26 @@ const services = [
   },
 
   {
+    name: "Car & Bike Mechanic",
+    slug: "car-bike-mechanic",
+    description:
+      "Professional car and bike servicing, repair, maintenance and roadside assistance.",
+    visitFee: 200,
+    estimatedCostMin: 300,
+    estimatedCostMax: 20000,
+  },
+
+  {
+    name: "Priest / Purohit Services",
+    slug: "priest-purohit-services",
+    description:
+      "Professional priest and purohit services for poojas, ceremonies, housewarming and religious occasions.",
+    visitFee: 200,
+    estimatedCostMin: 500,
+    estimatedCostMax: 15000,
+  },
+
+  {
     name: "Fan Repair",
     slug: "fan-repair",
     description:
@@ -44,6 +64,17 @@ const services = [
     estimatedCostMin: 500,
     estimatedCostMax: 4000,
   },
+
+  {
+    name: "Home Cleaning Services",
+    slug: "home-cleaning-services",
+    description:
+      "Professional home cleaning services including deep cleaning, kitchen, bathroom, sofa and move-in or move-out cleaning.",
+    visitFee: 200,
+    estimatedCostMin: 500,
+    estimatedCostMax: 10000,
+  },
+
   {
     name: "Wall Painting",
     slug: "wall-painting",
@@ -53,6 +84,7 @@ const services = [
     estimatedCostMin: 1500,
     estimatedCostMax: 25000,
   },
+
   {
     name: "Civil(Mestri) Repair",
     slug: "civil-repair",
@@ -62,6 +94,7 @@ const services = [
     estimatedCostMin: 500,
     estimatedCostMax: 50000,
   },
+
   {
     name: "Washing Machine Repair",
     slug: "washing-machine-repair",
