@@ -1,11 +1,14 @@
 import {
   LuAirVent,
   LuBrickWall,
+  LuCar,
   LuDroplets,
   LuFan,
+  LuFlame,
   LuMonitorSmartphone,
   LuPaintRoller,
   LuRefrigerator,
+  LuSparkles,
   LuTv,
   LuWashingMachine,
   LuWrench,
@@ -22,6 +25,9 @@ import civilRepairImage from "../assets/images/services/civil-repair.jpg";
 import fanImage from "../assets/images/services/fan.jpg";
 import fridgeImage from "../assets/images/services/fridge.jpg";
 import washingImage from "../assets/images/services/washing.jpg";
+import cleaningImage from "../assets/images/services/cleaning.jpg";
+import carBikeImage from "../assets/images/services/car-bike-mechanic.jpg";
+import priestImage from "../assets/images/services/priest-purohit.jpg";
 
 
 // ---------------------------------------------------------------------------
@@ -47,12 +53,53 @@ import washingImage from "../assets/images/services/washing.jpg";
 //   description – one-line blurb on cards
 //   issues      – “Common <issueLabel> Issues We Fix” list on the detail page
 //   aliases     – old URLs that should still work (redirected to the new slug)
+//   estimateLabel / estimateNote – optional wording for the estimate box
+//   noEstimate  – true when the backend price range is 0–0 (e.g. priest services)
 //   tone        – Tailwind classes for the icon tile (background + icon colour)
 //
 // The ORDER of the entries below is the order services appear on the site.
 // ---------------------------------------------------------------------------
 
 const PRESENTATION = {
+  "home-cleaning-services": {
+    icon: LuSparkles,
+    image: cleaningImage,
+    tone: "bg-lime-50 text-lime-600",
+    tagline: "A spotless, fresh home without the effort.",
+    description: "Deep cleaning for kitchen, bathroom, sofa and move-in or move-out.",
+    issueLabel: "Home Cleaning",
+    issues: [
+      "Full home deep cleaning",
+      "Kitchen and chimney cleaning",
+      "Bathroom and tile cleaning",
+      "Sofa and carpet cleaning",
+      "Move-in / move-out cleaning",
+    ],
+    estimateLabel: "Estimated Cleaning Cost",
+    estimateNote:
+      "Final cost depends on the size of your home and the type of cleaning. You will pay the cleaning amount directly to the cleaner after the visit.",
+    keywords: ["clean", "cleaning", "deep clean", "maid", "sofa", "kitchen", "bathroom", "sanitize", "move in", "move out"],
+    aliases: ["cleaning", "home-cleaning"],
+  },
+
+  "car-bike-mechanic": {
+    icon: LuCar,
+    image: carBikeImage,
+    tone: "bg-red-50 text-red-600",
+    tagline: "Doorstep servicing and repair for your car and bike.",
+    description: "Servicing, breakdown repair, battery, brakes and roadside help.",
+    issueLabel: "Car & Bike",
+    issues: [
+      "Regular servicing and oil change",
+      "Battery and starting problems",
+      "Brake and clutch repair",
+      "Tyre and puncture help",
+      "Roadside breakdown assistance",
+    ],
+    keywords: ["car", "bike", "scooter", "motorcycle", "mechanic", "vehicle", "tyre", "battery", "brake", "service", "roadside", "puncture"],
+    aliases: ["car-mechanic", "bike-mechanic", "mechanic"],
+  },
+
   "mobile-laptop-repair": {
     icon: LuMonitorSmartphone,
     image: mobileImage,
@@ -225,6 +272,30 @@ const PRESENTATION = {
     keywords: ["electrician", "wiring", "switch", "light", "inverter", "mcb"],
     aliases: ["electrical"],
   },
+
+  "priest-purohit-services": {
+    icon: LuFlame,
+    image: priestImage,
+    tone: "bg-orange-50 text-orange-600",
+    tagline: "Experienced priests for every pooja and ceremony.",
+    description: "Pandits for poojas, housewarming, ceremonies and religious occasions.",
+    issueLabel: "Priest",
+    issues: [
+      "Griha pravesh (housewarming)",
+      "Satyanarayan and other poojas",
+      "Naming and thread ceremonies",
+      "Wedding and engagement rituals",
+      "Festival and vastu poojas",
+    ],
+    noEstimate: true,
+    estimateLabel: "Dakshina",
+    estimateNote:
+      "Dakshina depends on the pooja or ceremony. Agree the amount directly with the priest after the visit fee is paid.",
+    visitNote:
+      "Pay now to book a priest. This confirms your booking and covers the priest's visit and consultation.",
+    keywords: ["priest", "purohit", "pandit", "pooja", "puja", "ceremony", "housewarming", "griha pravesh", "satyanarayan", "havan", "vastu", "wedding"],
+    aliases: ["priest", "purohit", "pandit"],
+  },
 };
 
 const PRESENTATION_ORDER = Object.keys(PRESENTATION);
@@ -264,6 +335,15 @@ export const decorateService = (apiService) => {
     tagline: look.tagline ?? apiService.description,
     issueLabel: look.issueLabel ?? apiService.name,
     issues: look.issues ?? [],
+    estimateLabel: look.estimateLabel ?? "Estimated Repair Cost",
+    estimateNote:
+      look.estimateNote ??
+      "Final cost depends on the issue, parts and labour. You will pay the repair amount directly to the technician after diagnosis.",
+    visitNote:
+      look.visitNote ??
+      "Pay now to book a technician visit. This covers visit, inspection and diagnosis.",
+    // Backend gives 0–0 when a price can't be estimated up front
+    noEstimate: look.noEstimate ?? apiService.estimatedCostMax === 0,
     keywords: look.keywords ?? [],
     aliases: look.aliases ?? [],
   };

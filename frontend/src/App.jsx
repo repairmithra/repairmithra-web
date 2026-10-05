@@ -20,6 +20,7 @@ import Profile from "./pages/profile/Profile";
 import PartnerRegister from "./pages/partner/PartnerRegister";
 import PartnerVerify from "./pages/partner/PartnerVerify";
 import PartnerLogin from "./pages/partner/PartnerLogin";
+import PartnerForgotPassword from "./pages/partner/PartnerForgotPassword";
 import PartnerDashboard from "./pages/partner/PartnerDashboard";
 import PartnerJobs from "./pages/partner/PartnerJobs";
 import PartnerJobDetails from "./pages/partner/PartnerJobDetails";
@@ -62,6 +63,7 @@ function App() {
         <Route path="/partner/register" element={<PartnerRegister />} />
         <Route path="/partner/verify" element={<PartnerVerify />} />
         <Route path="/partner/login" element={<PartnerLogin />} />
+        <Route path="/partner/forgot-password" element={<PartnerForgotPassword />} />
         <Route path="/partner/dashboard" element={<PartnerDashboard />} />
         <Route path="/partner/jobs" element={<PartnerJobs />} />
         <Route path="/partner/jobs/:id" element={<PartnerJobDetails />} />

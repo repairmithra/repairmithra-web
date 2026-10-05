@@ -108,8 +108,7 @@ function ServiceDetail() {
                 </div>
               </div>
               <p className="mt-4 text-sm leading-6 text-slate-600">
-                Pay now to book a technician visit. This covers visit,
-                inspection and diagnosis.
+                {service.visitNote}
               </p>
             </div>
 
@@ -120,17 +119,17 @@ function ServiceDetail() {
                 </span>
                 <div>
                   <p className="text-sm font-medium text-slate-600">
-                    Estimated Repair Cost
+                    {service.estimateLabel}
                   </p>
                   <p className="text-2xl font-extrabold leading-none text-slate-900">
-                    {formatINR(service.estimateMin)} – {formatINR(service.estimateMax)}
+                    {service.noEstimate
+                      ? "As per ceremony"
+                      : `${formatINR(service.estimateMin)} – ${formatINR(service.estimateMax)}`}
                   </p>
                 </div>
               </div>
               <p className="mt-4 text-sm leading-6 text-slate-600">
-                Final cost depends on the issue, parts and labour. You will
-                pay the repair amount directly to the technician after
-                diagnosis.
+                {service.estimateNote}
               </p>
             </div>
           </div>

@@ -158,7 +158,7 @@ function PartnerLogin() {
                 />
                 Remember me
               </label>
-              <Link to="#" className="text-sm font-medium text-emerald-600 hover:text-emerald-700">
+              <Link to="/partner/forgot-password" className="text-sm font-medium text-emerald-600 hover:text-emerald-700">
                 Forgot Password?
               </Link>
             </div>

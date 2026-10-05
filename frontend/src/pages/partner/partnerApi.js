@@ -15,6 +15,15 @@ export const registerPartner = (payload) =>
 export const loginPartner = (identifier, password) =>
   apiFetch("/api/partner/login", { method: "POST", body: { identifier, password } });
 
+export const forgotPartnerPassword = (identifier) =>
+  apiFetch("/api/partner/forgot-password", { method: "POST", body: { identifier } });
+
+export const resetPartnerPassword = (identifier, code, newPassword) =>
+  apiFetch("/api/partner/reset-password", {
+    method: "POST",
+    body: { identifier, code, newPassword },
+  });
+
 export const getPartnerDashboard = (signal) =>
   apiFetch("/api/partner/dashboard", { auth: true, signal });
 
