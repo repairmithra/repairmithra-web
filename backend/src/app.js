@@ -15,7 +15,8 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
-app.use(express.json());
+// 5 MB: partner document uploads arrive as base64 inside the JSON body.
+app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 

@@ -632,12 +632,120 @@ export const resetPartnerPassword = async (req, res) => {
 // PARTNER PROFILE   (GET/PATCH /api/partner/profile)
 // ======================================================
 
+// ---------- profile extras: working hours, bank details, documents ----------
+
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const DOC_TYPES = ["idProof", "photo", "certificate"];
+const MAX_DOC_CHARS = 1_900_000; // ~1.4 MB of binary once base64-decoded
+const DATA_URL = /^data:(image\/(jpeg|png|webp)|application\/pdf);base64,[A-Za-z0-9+/=]+$/;
+const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+const maskAccount = (n) =>
+  n && n.length > 4 ? `${"•".repeat(n.length - 4)}${n.slice(-4)}` : n || "";
+
+// Returns { value } or { error }
+const parseWorkingHours = (input) => {
+  if (!input || typeof input !== "object") return { error: "Invalid working hours" };
+  const out = {};
+  for (const day of DAY_KEYS) {
+    const d = input[day];
+    if (!d || typeof d.open !== "boolean") return { error: "Invalid working hours" };
+    if (d.open && (!HHMM.test(d.start) || !HHMM.test(d.end) || d.end <= d.start)) {
+      return { error: "Closing time must be after opening time" };
+    }
+    out[day] = {
+      open: d.open,
+      start: HHMM.test(d.start) ? d.start : "09:00",
+      end: HHMM.test(d.end) ? d.end : "18:00",
+    };
+  }
+  if (!DAY_KEYS.some((k) => out[k].open)) return { error: "Select at least one working day" };
+  return { value: out };
+};
+
+const parseBankDetails = (input, existing) => {
+  if (!input || typeof input !== "object") return { error: "Invalid bank details" };
+  const holder = asTrimmedString(input.accountHolder);
+  const ifsc = asTrimmedString(input.ifsc).toUpperCase();
+  const upi = asTrimmedString(input.upiId);
+  const bankName = asTrimmedString(input.bankName);
+  let account = asTrimmedString(input.accountNumber).replace(/\s/g, "");
+
+  // The client only ever sees a masked number; a masked value means "unchanged".
+  if (account.includes("•")) account = existing?.accountNumber || "";
+
+  if (!account && !upi) return { error: "Enter bank account details or a UPI ID" };
+  if (account) {
+    if (holder.length < 2) return { error: "Enter the account holder name" };
+    if (!/^[0-9]{9,18}$/.test(account)) return { error: "Account number must be 9 to 18 digits" };
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return { error: "Enter a valid IFSC code" };
+  }
+  if (upi && !/^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(upi)) return { error: "Enter a valid UPI ID" };
+
+  return {
+    value: {
+      accountHolder: holder,
+      accountNumber: account,
+      ifsc: account ? ifsc : "",
+      bankName,
+      upiId: upi,
+    },
+  };
+};
+
+// Incoming list = the full desired set. New uploads carry `data`; entries
+// without `data` keep the stored file. Status is never taken from the client.
+const parseDocuments = (input, existing = []) => {
+  if (!Array.isArray(input) || input.length > DOC_TYPES.length) {
+    return { error: "Invalid documents" };
+  }
+  const seen = new Set();
+  const out = [];
+  for (const doc of input) {
+    if (!doc || !DOC_TYPES.includes(doc.type) || seen.has(doc.type)) {
+      return { error: "Invalid document type" };
+    }
+    seen.add(doc.type);
+    const prev = existing.find((d) => d.type === doc.type);
+
+    if (typeof doc.data === "string" && doc.data) {
+      if (doc.data.length > MAX_DOC_CHARS) return { error: "File is too large (max about 1.4 MB)" };
+      if (!DATA_URL.test(doc.data)) return { error: "Upload a JPG, PNG, WebP or PDF file" };
+      out.push({
+        type: doc.type,
+        name: asTrimmedString(doc.name).slice(0, 120) || "document",
+        data: doc.data,
+        status: "pending",
+        uploadedAt: new Date(),
+      });
+    } else if (prev) {
+      out.push(prev);
+    } else {
+      return { error: "Document file is missing" };
+    }
+  }
+  return { value: out };
+};
+
+// What the client may see: no raw account number, no file contents.
+const toClientTechnician = (technician) => {
+  const t = technician.toObject();
+  if (t.bankDetails) t.bankDetails = { ...t.bankDetails, accountNumber: maskAccount(t.bankDetails.accountNumber) };
+  if (Array.isArray(t.documents)) {
+    t.documents = t.documents.map(({ data, ...rest }) => rest); // eslint-disable-line no-unused-vars
+  } else {
+    t.documents = [];
+  }
+  return t;
+};
+
+const PROFILE_EXTRAS = "+bankDetails +documents";
+
 export const getPartnerProfile = async (req, res) => {
   try {
-    const technician = await Technician.findOne({ user: req.user._id }).populate(
-      "services",
-      "name slug"
-    );
+    const technician = await Technician.findOne({ user: req.user._id })
+      .select(PROFILE_EXTRAS)
+      .populate("services", "name slug");
 
     if (!technician) {
       return res.status(404).json({
@@ -650,7 +758,7 @@ export const getPartnerProfile = async (req, res) => {
       success: true,
       data: {
         user: req.user,
-        technician,
+        technician: toClientTechnician(technician),
         avgRating:
           technician.ratingCount > 0
             ? Number((technician.ratingSum / technician.ratingCount).toFixed(1))
@@ -670,7 +778,7 @@ export const getPartnerProfile = async (req, res) => {
 export const updatePartnerProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-    const technician = await Technician.findOne({ user: req.user._id });
+    const technician = await Technician.findOne({ user: req.user._id }).select(PROFILE_EXTRAS);
 
     if (!user || !technician) {
       return res.status(404).json({
@@ -726,8 +834,29 @@ export const updatePartnerProfile = async (req, res) => {
       technician.services = services.map((s) => s._id);
     }
 
+    if (req.body.workingHours !== undefined) {
+      const r = parseWorkingHours(req.body.workingHours);
+      if (r.error) return res.status(400).json({ success: false, message: r.error });
+      technician.workingHours = r.value;
+    }
+
+    if (req.body.bankDetails !== undefined) {
+      const r = parseBankDetails(req.body.bankDetails, technician.bankDetails);
+      if (r.error) return res.status(400).json({ success: false, message: r.error });
+      technician.bankDetails = r.value;
+    }
+
+    if (req.body.documents !== undefined) {
+      const r = parseDocuments(req.body.documents, technician.documents);
+      if (r.error) return res.status(400).json({ success: false, message: r.error });
+      technician.documents = r.value;
+    }
+
     await user.save();
     await technician.save();
+
+    // Return services populated (name + slug), same shape as GET /profile.
+    await technician.populate("services", "name slug");
 
     const updatedUser = user.toObject();
     delete updatedUser.password;
@@ -735,7 +864,7 @@ export const updatePartnerProfile = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      data: { user: updatedUser, technician },
+      data: { user: updatedUser, technician: toClientTechnician(technician) },
     });
   } catch (error) {
     console.error("Update partner profile error:", error);

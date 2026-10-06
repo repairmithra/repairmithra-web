@@ -84,6 +84,46 @@ const technicianSchema = new mongoose.Schema(
       maxlength: 500,
     },
 
+    // Weekly schedule: { mon: { open, start: "09:00", end: "18:00" }, ... sun }
+    workingHours: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
+
+    // Payout details. Hidden from queries by default (select: false) so they
+    // never leak through other endpoints; the partner profile routes opt in.
+    bankDetails: {
+      type: {
+        accountHolder: { type: String, trim: true, maxlength: 80, default: "" },
+        accountNumber: { type: String, trim: true, maxlength: 18, default: "" },
+        ifsc: { type: String, trim: true, uppercase: true, maxlength: 11, default: "" },
+        bankName: { type: String, trim: true, maxlength: 80, default: "" },
+        upiId: { type: String, trim: true, maxlength: 80, default: "" },
+      },
+      default: undefined,
+      select: false,
+    },
+
+    // KYC documents (ID proof, photo, certificate). `status` is only ever
+    // changed by the server / an admin — never by the partner.
+    documents: {
+      type: [
+        {
+          type: { type: String, enum: ["idProof", "photo", "certificate"], required: true },
+          name: { type: String, trim: true, maxlength: 120, default: "" },
+          data: { type: String, default: "" }, // base64 data URL
+          status: {
+            type: String,
+            enum: ["pending", "verified", "rejected"],
+            default: "pending",
+          },
+          uploadedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+      select: false,
+    },
+
     ratingSum: {
       type: Number,
       default: 0,
