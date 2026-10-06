@@ -17,6 +17,7 @@ import {
 } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
+import technician from "../../assets/images/partner/technician-cutout.png";
 import { API_BASE } from "../../utils/api";
 
 function Registration() {
@@ -636,34 +637,32 @@ function Registration() {
             bg-center
           "
           style={{
-            backgroundImage: `
-              linear-gradient(
-                to bottom,
-                rgba(0,43,92,0.05),
-                rgba(0,55,115,0.90)
-              ),
-              url("/repair-worker.jpg")
-            `,
+            // The old background pointed at /repair-worker.jpg (not in the
+            // project), so only the gradient showed. Plain brand gradient now;
+            // the technician is a real <img> below.
+            backgroundImage:
+              "linear-gradient(to bottom, #dbe6f3 0%, #7fa0c6 38%, #2f5f94 72%, #1c4a82 100%)",
           }}
         >
 
-          {/* LOGO */}
+          {/* TECHNICIAN (fills the space between the logo and the headline) */}
 
-          <Link to="/">
+          <div className="relative my-2 min-h-[220px] flex-1">
             <img
-              src={logo}
-              alt="RepairMithra Logo"
-              className="
-                w-[180px]
-                h-auto
-                object-contain
-              "
+              src={technician}
+              alt="RepairMithra technician giving a thumbs up"
+              className="absolute inset-0 h-full w-full select-none object-contain object-bottom drop-shadow-[0_12px_24px_rgba(0,30,70,0.35)]"
+              style={{
+                WebkitMaskImage: "linear-gradient(to bottom, #000 82%, transparent 100%)",
+                maskImage: "linear-gradient(to bottom, #000 82%, transparent 100%)",
+              }}
+              draggable={false}
             />
-          </Link>
+          </div>
 
           {/* LEFT CONTENT */}
 
-          <div className="mt-auto text-white">
+          <div className="relative z-10 text-white">
 
             <h1
               className="

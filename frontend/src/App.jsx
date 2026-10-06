@@ -30,9 +30,10 @@ import PartnerGrowWithUs from "./pages/partner/PartnerGrowWithUs";
 
 // The logged-in partner app (dashboard, jobs, earnings, profile) has its own
 // PartnerHeader and should not show the customer site's Navbar/Footer.
-// Partner Register/Verify/Login/Grow-with-Us stay inside the normal site
-// chrome, same as the customer Login/Registration pages.
-const PARTNER_APP_PATTERN = /^\/partner\/(dashboard|jobs|earnings|profile)/;
+// Grow-with-Us also has its own header (logo + menu) matching the design.
+// Partner Register/Verify/Login stay inside the normal site chrome, same as
+// the customer Login/Registration pages.
+const PARTNER_APP_PATTERN = /^\/partner\/(dashboard|jobs|earnings|profile|grow)/;
 
 function App() {
   const location = useLocation();

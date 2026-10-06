@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiUser,
@@ -13,12 +13,28 @@ import {
   FiAlertCircle,
   FiCheckCircle,
   FiLogOut,
+  FiLock,
+  FiMail,
+  FiPhone,
 } from "react-icons/fi";
 
-import { clearSession, getToken } from "../../utils/auth";
+import { clearSession, getStoredUser, getToken, setSession } from "../../utils/auth";
 import { isAuthError } from "../../utils/api";
 import PartnerHeader from "./components/PartnerHeader";
+import {
+  WorkingHoursPanel,
+  BankPanel,
+  DocumentsPanel,
+  getHoursStatus,
+  getBankStatus,
+  getDocumentsStatus,
+} from "./components/ProfileSections";
 import { getPartnerProfile, updatePartnerProfile, getServices } from "./partnerApi";
+
+// Services arrive either populated ({ _id, name }) or as bare ids, depending on
+// which endpoint returned them — accept both.
+const idsOf = (list) =>
+  (list || []).map((x) => (typeof x === "string" ? x : x?._id)).filter(Boolean);
 
 function PartnerProfile() {
   const navigate = useNavigate();
@@ -30,6 +46,8 @@ function PartnerProfile() {
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(null);
+  const [savingAvailability, setSavingAvailability] = useState(false);
+  const successTimer = useRef(null);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -57,7 +75,7 @@ function PartnerProfile() {
           city: profileRes.data.technician.city || "",
           experienceYears: String(profileRes.data.technician.experienceYears ?? 0),
           bio: profileRes.data.technician.bio || "",
-          serviceIds: (profileRes.data.technician.services || []).map((s) => s._id),
+          serviceIds: idsOf(profileRes.data.technician.services),
           isAvailable: profileRes.data.technician.isAvailable,
         });
       } catch (err) {
@@ -93,22 +111,143 @@ function PartnerProfile() {
     }));
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      const res = await updatePartnerProfile({
-        ...form,
-        experienceYears: Number(form.experienceYears) || 0,
+  // Show a message at the top of the page and scroll there, so the result of a
+  // "Save Changes" button at the bottom of a long list is never out of sight.
+  const showMessage = (type, text) => {
+    clearTimeout(successTimer.current);
+    setError(type === "error" ? text : "");
+    setSuccess(type === "success" ? text : "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (type === "success") {
+      successTimer.current = setTimeout(() => setSuccess(""), 4000);
+    }
+  };
+
+  useEffect(() => () => clearTimeout(successTimer.current), []);
+
+  const validate = (section) => {
+    if (section === "personal") {
+      if (form.fullName.trim().length < 2) return "Please enter your full name.";
+      if (!/^[6-9]\d{9}$/.test(form.phone)) {
+        return "Enter a valid 10-digit mobile number.";
+      }
+    }
+    if (section === "services" && form.serviceIds.length === 0) {
+      return "Select at least one service category.";
+    }
+    if (section === "area" && form.city.trim().length < 2) {
+      return "Please enter your service area.";
+    }
+    return "";
+  };
+
+  const saveProfile = async (payload) => {
+    const res = await updatePartnerProfile({
+      ...payload,
+      fullName: payload.fullName.trim(),
+      city: payload.city.trim(),
+      bio: payload.bio.trim(),
+      experienceYears: Number(payload.experienceYears) || 0,
+    });
+
+    setProfile((prev) => ({ ...prev, user: res.data.user, technician: res.data.technician }));
+
+    // Keep the saved session (used by the header/menu) in step with the new name/phone.
+    const token = getToken();
+    const stored = getStoredUser();
+    if (token && stored && res.data?.user) {
+      setSession(token, {
+        ...stored,
+        fullName: res.data.user.fullName ?? stored.fullName,
+        phone: res.data.user.phone ?? stored.phone,
       });
-      setProfile((prev) => ({ ...prev, user: res.data.user, technician: res.data.technician }));
-      setSuccess("Profile updated successfully");
+    }
+    return res;
+  };
+
+  const handleSave = async (section) => {
+    const problem = validate(section);
+    if (problem) {
+      showMessage("error", problem);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await saveProfile(form);
+      showMessage("success", "Profile updated successfully");
       setExpanded(null);
     } catch (err) {
-      setError(err.message || "Could not update profile");
+      if (isAuthError(err)) {
+        navigate("/partner/login", { replace: true, state: { from: "/partner/profile" } });
+        return;
+      }
+      showMessage("error", err.message || "Could not update profile");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // The availability checkbox saves straight away (it used to change only on
+  // screen until some other section happened to be saved).
+  const handleAvailabilityChange = async (checked) => {
+    const previous = form.isAvailable;
+    setForm((p) => ({ ...p, isAvailable: checked }));
+    setSavingAvailability(true);
+    try {
+      // Only send saved values + the toggle, so half-edited fields aren't saved by accident.
+      await saveProfile({
+        fullName: profile.user.fullName || "",
+        phone: profile.user.phone || "",
+        city: profile.technician.city || "",
+        experienceYears: profile.technician.experienceYears ?? 0,
+        bio: profile.technician.bio || "",
+        serviceIds: idsOf(profile.technician.services),
+        isAvailable: checked,
+      });
+      showMessage("success", checked ? "You're now available for new jobs" : "You're now marked unavailable");
+    } catch (err) {
+      setForm((p) => ({ ...p, isAvailable: previous }));
+      showMessage("error", err.message || "Could not update availability");
+    } finally {
+      setSavingAvailability(false);
+    }
+  };
+
+  const [savingExtra, setSavingExtra] = useState(false);
+
+  // Working hours, bank details and documents are saved through the same
+  // profile endpoint. The saved profile values are re-sent alongside, so
+  // half-edited fields in other sections are never saved by accident.
+  const saveExtra = async (field, value, message) => {
+    setSavingExtra(true);
+    try {
+      const t = profile.technician;
+      const res = await saveProfile({
+        fullName: profile.user.fullName || "",
+        phone: profile.user.phone || "",
+        city: t.city || "",
+        experienceYears: t.experienceYears ?? 0,
+        bio: t.bio || "",
+        serviceIds: idsOf(t.services),
+        isAvailable: t.isAvailable,
+        [field]: value,
+      });
+      if (res.data?.technician?.[field] === undefined) {
+        throw new Error(
+          `The server accepted the request but did not store "${field}". The backend profile route needs to save this field.`
+        );
+      }
+      showMessage("success", message);
+      if (field !== "documents") setExpanded(null);
+    } catch (err) {
+      if (isAuthError(err)) {
+        navigate("/partner/login", { replace: true, state: { from: "/partner/profile" } });
+        return;
+      }
+      showMessage("error", err.message || "Could not save changes");
+    } finally {
+      setSavingExtra(false);
     }
   };
 
@@ -125,15 +264,22 @@ function PartnerProfile() {
     );
   }
 
+  const experienceOptions = [0, 1, 2, 3, 5, 7, 10, 15];
+  const currentYears = Number(form.experienceYears);
+  if (!Number.isNaN(currentYears) && !experienceOptions.includes(currentYears)) {
+    experienceOptions.push(currentYears);
+    experienceOptions.sort((a, b) => a - b);
+  }
+
   const initial = (profile?.user?.fullName || "P").trim().charAt(0).toUpperCase();
 
   const MENU_ITEMS = [
     { key: "personal", label: "Personal Details", icon: FiUser },
     { key: "services", label: "Service Categories", icon: FiTool },
     { key: "area", label: "Service Area", icon: FiMapPin },
-    { key: "hours", label: "Working Hours", icon: FiClock, comingSoon: true },
-    { key: "bank", label: "Bank & Payment Details", icon: FiCreditCard, comingSoon: true },
-    { key: "documents", label: "Documents", icon: FiFileText, comingSoon: true },
+    { key: "hours", label: "Working Hours", icon: FiClock, status: getHoursStatus(profile?.technician?.workingHours) },
+    { key: "bank", label: "Bank & Payment Details", icon: FiCreditCard, status: getBankStatus(profile?.technician?.bankDetails) },
+    { key: "documents", label: "Documents", icon: FiFileText, status: getDocumentsStatus(profile?.technician?.documents) },
     { key: "ratings", label: "Ratings & Reviews", icon: FiStar },
     { key: "settings", label: "Account Settings", icon: FiSettings },
   ];
@@ -180,7 +326,8 @@ function PartnerProfile() {
             <input
               type="checkbox"
               checked={form.isAvailable}
-              onChange={(e) => setForm((p) => ({ ...p, isAvailable: e.target.checked }))}
+              disabled={savingAvailability}
+              onChange={(e) => handleAvailabilityChange(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
             />
             Available for new jobs
@@ -189,12 +336,11 @@ function PartnerProfile() {
 
         {/* Menu */}
         <div className="mt-6 divide-y divide-gray-100 rounded-2xl border border-gray-100 bg-white shadow-sm">
-          {MENU_ITEMS.map(({ key, label, icon: Icon, comingSoon }) => (
+          {MENU_ITEMS.map(({ key, label, icon: Icon, status }) => (
             <div key={key}>
               <button
+                aria-expanded={expanded === key}
                 onClick={() => {
-                  if (comingSoon) return;
-                  if (key === "settings") return;
                   setExpanded((prev) => (prev === key ? null : key));
                 }}
                 className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-gray-50"
@@ -202,13 +348,21 @@ function PartnerProfile() {
                 <span className="flex items-center gap-3 text-sm font-medium text-slate-700">
                   <Icon size={17} className="text-emerald-600" />
                   {label}
-                  {comingSoon && (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                      Coming soon
+                  {status && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        status.tone === "green"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : status.tone === "amber"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      {status.label}
                     </span>
                   )}
                 </span>
-                {key !== "settings" && !comingSoon && (
+                {(
                   <FiChevronRight
                     size={16}
                     className={`text-slate-400 transition-transform ${
@@ -242,7 +396,7 @@ function PartnerProfile() {
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
                   <button
-                    onClick={handleSave}
+                    onClick={() => handleSave("personal")}
                     disabled={saving}
                     className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
@@ -272,7 +426,7 @@ function PartnerProfile() {
                     })}
                   </div>
                   <button
-                    onClick={handleSave}
+                    onClick={() => handleSave("services")}
                     disabled={saving}
                     className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
@@ -294,18 +448,65 @@ function PartnerProfile() {
                     onChange={(e) => setForm((p) => ({ ...p, experienceYears: e.target.value }))}
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   >
-                    {[0, 1, 2, 3, 5, 7, 10, 15].map((y) => (
+                    {experienceOptions.map((y) => (
                       <option key={y} value={y}>
                         {y === 0 ? "Less than 1 year" : `${y}+ years experience`}
                       </option>
                     ))}
                   </select>
                   <button
-                    onClick={handleSave}
+                    onClick={() => handleSave("area")}
                     disabled={saving}
                     className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
                     {saving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              )}
+
+              {expanded === "hours" && key === "hours" && (
+                <WorkingHoursPanel
+                  saved={profile?.technician?.workingHours}
+                  saving={savingExtra}
+                  onError={(m) => showMessage("error", m)}
+                  onSave={(v) => saveExtra("workingHours", v, "Working hours updated")}
+                />
+              )}
+
+              {expanded === "bank" && key === "bank" && (
+                <BankPanel
+                  saved={profile?.technician?.bankDetails}
+                  saving={savingExtra}
+                  onError={(m) => showMessage("error", m)}
+                  onSave={(v) => saveExtra("bankDetails", v, "Bank details saved")}
+                />
+              )}
+
+              {expanded === "documents" && key === "documents" && (
+                <DocumentsPanel
+                  saved={profile?.technician?.documents}
+                  saving={savingExtra}
+                  onError={(m) => showMessage("error", m)}
+                  onSave={(v) => saveExtra("documents", v, "Documents updated")}
+                />
+              )}
+
+              {expanded === "settings" && key === "settings" && (
+                <div className="space-y-3 px-5 pb-5 text-sm text-slate-600">
+                  <p className="flex items-center gap-2">
+                    <FiMail size={15} className="text-emerald-600" />
+                    {profile?.user?.email || "No email on file"}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <FiPhone size={15} className="text-emerald-600" />
+                    {profile?.user?.phone || "No mobile number on file"}
+                  </p>
+                  <button
+                    onClick={() => navigate("/partner/forgot-password")}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-600 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                  >
+                    <FiLock size={15} />
+                    Change Password
                   </button>
                 </div>
               )}
