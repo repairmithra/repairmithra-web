@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Single-page app fallback: serve index.html for every path so React Router
+# can handle routes like /login on refresh or direct visits.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
