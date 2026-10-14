@@ -3,11 +3,11 @@ import { apiFetch } from "../../utils/api";
 // Thin wrappers around apiFetch for every /api/partner/* endpoint, so the
 // page components stay focused on UI instead of request plumbing.
 
-export const sendPartnerOtp = (email) =>
-  apiFetch("/api/partner/send-otp", { method: "POST", body: { email } });
+export const sendPartnerOtp = (phone) =>
+  apiFetch("/api/partner/send-otp", { method: "POST", body: { phone } });
 
-export const verifyPartnerOtp = (email, otp) =>
-  apiFetch("/api/partner/verify-otp", { method: "POST", body: { email, otp } });
+export const verifyPartnerOtp = (phone, otp) =>
+  apiFetch("/api/partner/verify-otp", { method: "POST", body: { phone, otp } });
 
 export const registerPartner = (payload) =>
   apiFetch("/api/partner/register", { method: "POST", body: payload });

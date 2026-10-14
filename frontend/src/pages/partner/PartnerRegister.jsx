@@ -148,11 +148,14 @@ function PartnerRegister() {
 
       const email = formData.email.trim().toLowerCase();
 
-      const otpResponse = await sendPartnerOtp(email);
+      const phone = formData.phone.trim();
+
+      // OTP goes to the partner's MOBILE number by SMS (no email verification)
+      const otpResponse = await sendPartnerOtp(phone);
 
       const pendingPartner = {
         fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
+        phone,
         email,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
@@ -163,14 +166,14 @@ function PartnerRegister() {
         serviceIds: selectedServiceIds,
         latitude: coords.latitude,
         longitude: coords.longitude,
-        // Only present when the backend is running in demo mode
+        // Only present when the backend is running in dev mode
         // (DEV_LOG_OTP=true), so the verify screen can show/auto-fill it.
         devOtp: otpResponse?.devOtp || null,
       };
 
       sessionStorage.setItem("rm_pending_partner", JSON.stringify(pendingPartner));
 
-      navigate("/partner/verify", { state: { email: pendingPartner.email } });
+      navigate("/partner/verify", { state: { phone: pendingPartner.phone } });
     } catch (err) {
       setServerError(
         err instanceof ApiError || err instanceof Error
