@@ -6,48 +6,102 @@ import Technician from "../models/Technician.js";
 import Service from "../models/Service.js";
 import Booking from "../models/Booking.js";
 import Payment from "../models/Payment.js";
+import EmailVerification from "../models/EmailVerification.js";
 import PasswordReset from "../models/PasswordReset.js";
 
 import generateToken from "../utils/generateToken.js";
 import { isObjectId, isValidLatLng, toCoordinate } from "../utils/validators.js";
-import { sendPasswordResetEmail } from "../services/emailService.js";
-import {
-  INDIAN_MOBILE,
-  issuePhoneOtp,
-  checkPhoneOtp,
-  consumePhoneOtp,
-} from "../services/phoneOtpService.js";
+import { sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
 
 const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "");
 
 // ======================================================
-// SEND PARTNER MOBILE OTP   (POST /api/partner/send-otp)
-// Body: { phone }. Step 3 in the Partner Workflow: "Verify Your Account".
+// SEND PARTNER EMAIL OTP   (POST /api/partner/send-otp)
+// Step 3 in the Partner Workflow: "Verify Your Account".
 // ======================================================
 
 export const sendPartnerOtp = async (req, res) => {
   try {
-    const phone = asTrimmedString(req.body.phone);
+    const email = asTrimmedString(req.body.email).toLowerCase();
 
-    if (!INDIAN_MOBILE.test(phone)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({
         success: false,
-        message: "Please enter a valid 10-digit Indian mobile number",
+        message: "Please enter a valid email address",
       });
     }
 
-    const existingUser = await User.findOne({ phone });
+    const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "This mobile number is already registered",
+        message: "This email is already registered",
       });
     }
 
-    const result = await issuePhoneOtp(phone);
+    const existing = await EmailVerification.findOne({ email });
 
-    return res.status(result.status).json(result.body);
+    if (existing) {
+      const cooldown = 60 * 1000;
+      const sinceLast = Date.now() - new Date(existing.lastSentAt).getTime();
+
+      if (sinceLast < cooldown) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${Math.ceil(
+            (cooldown - sinceLast) / 1000
+          )} seconds before requesting another code.`,
+        });
+      }
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    if (existing) {
+      existing.otpHash = otpHash;
+      existing.expiresAt = expiresAt;
+      existing.attempts = 0;
+      existing.lastSentAt = new Date();
+      await existing.save();
+    } else {
+      await EmailVerification.create({
+        email,
+        otpHash,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: new Date(),
+      });
+    }
+
+    // --------------------------------------------------
+    // DEMO MODE: show the code in the terminal (and hand it back to the
+    // frontend) instead of e-mailing it, so the partner flow can be demoed
+    // without a working Resend account or hitting email provider limits.
+    // Needs DEV_LOG_OTP=true in .env, and is ignored when NODE_ENV=production.
+    // --------------------------------------------------
+
+    if (
+      process.env.DEV_LOG_OTP === "true" &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      console.log(`🔑 [DEV] Partner verification code for ${email}: ${otp}`);
+
+      return res.status(200).json({
+        success: true,
+        message: "Verification code sent to your email address",
+        devOtp: otp,
+      });
+    }
+
+    await sendVerificationEmail(email, otp);
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification code sent to your email address",
+    });
   } catch (error) {
     console.error("Send partner OTP error:", error);
 
@@ -59,33 +113,63 @@ export const sendPartnerOtp = async (req, res) => {
 };
 
 // ======================================================
-// VERIFY PARTNER MOBILE OTP   (POST /api/partner/verify-otp)
-// Body: { phone, otp }
+// VERIFY PARTNER EMAIL OTP   (POST /api/partner/verify-otp)
 // ======================================================
 
 export const verifyPartnerOtp = async (req, res) => {
   try {
-    const phone = asTrimmedString(req.body.phone);
+    const email = asTrimmedString(req.body.email).toLowerCase();
     const otp = asTrimmedString(req.body.otp);
 
-    if (!phone || !/^\d{6}$/.test(otp)) {
+    if (!email || !/^\d{6}$/.test(otp)) {
       return res.status(400).json({
         success: false,
-        message: "Mobile number and 6 digit code are required",
+        message: "Email and 6 digit code are required",
       });
     }
 
-    const result = await checkPhoneOtp(phone, otp);
+    const verification = await EmailVerification.findOne({ email });
 
-    if (!result.ok) {
-      return res
-        .status(result.status)
-        .json({ success: false, message: result.message });
+    if (!verification) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code not found. Please request a new code.",
+      });
+    }
+
+    if (verification.expiresAt < new Date()) {
+      await EmailVerification.deleteOne({ _id: verification._id });
+
+      return res.status(400).json({
+        success: false,
+        message: "Verification code has expired. Please request a new code.",
+      });
+    }
+
+    if (verification.attempts >= 5) {
+      await EmailVerification.deleteOne({ _id: verification._id });
+
+      return res.status(429).json({
+        success: false,
+        message: "Too many incorrect attempts. Please request a new code.",
+      });
+    }
+
+    const submittedHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+    if (submittedHash !== verification.otpHash) {
+      verification.attempts += 1;
+      await verification.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code",
+      });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Mobile number verified successfully",
+      message: "Email verified successfully",
     });
   } catch (error) {
     console.error("Verify partner OTP error:", error);
@@ -192,13 +276,23 @@ export const registerPartner = async (req, res) => {
       });
     }
 
-    // Re-verify the mobile OTP on the server (never trust the client's word alone)
-    const otpResult = await checkPhoneOtp(phone, otp);
+    // Re-verify the OTP on the server (never trust the client's word alone)
+    const verification = await EmailVerification.findOne({ email });
 
-    if (!otpResult.ok) {
-      return res
-        .status(otpResult.status)
-        .json({ success: false, message: otpResult.message });
+    if (!verification || verification.expiresAt < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code has expired. Please verify your email again.",
+      });
+    }
+
+    const submittedHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+    if (submittedHash !== verification.otpHash) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code",
+      });
     }
 
     const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
@@ -245,7 +339,7 @@ export const registerPartner = async (req, res) => {
       isAvailable: true,
     });
 
-    await consumePhoneOtp(otpResult.record);
+    await EmailVerification.deleteOne({ _id: verification._id });
 
     const token = generateToken(user._id, user.role);
 

@@ -3,57 +3,188 @@ import bcrypt from "bcrypt";
 import generateToken from "../utils/generateToken.js";
 
 import User from "../models/User.js";
+import EmailVerification from "../models/EmailVerification.js";
 import PasswordReset from "../models/PasswordReset.js";
 import { sendPasswordResetEmail } from "../services/emailService.js";
-import {
-  INDIAN_MOBILE,
-  issuePhoneOtp,
-  checkPhoneOtp,
-  consumePhoneOtp,
-} from "../services/phoneOtpService.js";
 
 // ======================================================
-// SEND MOBILE VERIFICATION CODE   (POST /api/auth/send-verification-code)
-// Body: { phone }. Sends a 6-digit OTP by SMS.
+// SEND VERIFICATION CODE
 // ======================================================
-
-const publicUser = (user) => ({
-  id: user._id,
-  fullName: user.fullName,
-  email: user.email,
-  phone: user.phone,
-  address: user.address,
-  pincode: user.pincode,
-  role: user.role,
-  isVerified: user.isVerified,
-});
 
 export const sendVerificationCode = async (req, res) => {
   try {
-    const phone =
-      typeof req.body.phone === "string" ? req.body.phone.trim() : "";
+    let { email } = req.body;
 
-    if (!INDIAN_MOBILE.test(phone)) {
+    email = email?.trim().toLowerCase();
+
+    if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Please enter a valid 10-digit Indian mobile number",
+        message: "Email is required",
       });
     }
 
-    const existingUser = await User.findOne({ phone });
+    // Check if email is already registered
+    const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "Mobile number is already registered",
+        message: "Email is already registered",
       });
     }
 
-    const result = await issuePhoneOtp(phone);
+    // Check existing OTP
+    const existingVerification =
+      await EmailVerification.findOne({ email });
 
-    return res.status(result.status).json(result.body);
+    if (existingVerification) {
+      const now = new Date();
+
+      const timeSinceLastSent =
+        now.getTime() -
+        new Date(existingVerification.lastSentAt).getTime();
+
+      const cooldown = 60 * 1000;
+
+      if (timeSinceLastSent < cooldown) {
+        const remainingSeconds = Math.ceil(
+          (cooldown - timeSinceLastSent) / 1000
+        );
+
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${remainingSeconds} seconds before requesting another code.`,
+        });
+      }
+    }
+
+    // Generate 6 digit OTP
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+
+    // Hash OTP
+    const otpHash = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
+    // OTP expires after 10 minutes
+    const expiresAt = new Date(
+      Date.now() + 10 * 60 * 1000
+    );
+
+    if (existingVerification) {
+      existingVerification.otpHash = otpHash;
+      existingVerification.expiresAt = expiresAt;
+      existingVerification.attempts = 0;
+      existingVerification.lastSentAt = new Date();
+
+      await existingVerification.save();
+    } else {
+      await EmailVerification.create({
+        email,
+        otpHash,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: new Date(),
+      });
+    }
+
+    // --------------------------------------------------
+    // DEVELOPMENT ONLY: show the code in this terminal instead of e-mailing
+    // it, so you can register without a Resend account.
+    // Needs DEV_LOG_OTP=true in .env, and is ignored when NODE_ENV=production.
+    // --------------------------------------------------
+
+    if (
+      process.env.DEV_LOG_OTP === "true" &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      console.log(
+        `🔑 [DEV] Verification code for ${email}: ${verificationCode}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Verification code sent successfully",
+        devOtp: verificationCode,
+      });
+    }
+
+    // --------------------------------------------------
+    // SEND EMAIL
+    // --------------------------------------------------
+
+    const resendResponse = await fetch(
+      "https://api.resend.com/emails",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          // .env uses EMAIL_FROM (RESEND_FROM_EMAIL kept as an alias)
+          from:
+            process.env.EMAIL_FROM ||
+            process.env.RESEND_FROM_EMAIL ||
+            "RepairMithra <noreply@repairmithra.com>",
+          to: [email],
+          subject: "RepairMithra Email Verification Code",
+          html: `
+            <div style="font-family: Arial, sans-serif;">
+              <h2>RepairMithra Email Verification</h2>
+
+              <p>Your verification code is:</p>
+
+              <h1
+                style="
+                  letter-spacing: 6px;
+                  font-size: 32px;
+                "
+              >
+                ${verificationCode}
+              </h1>
+
+              <p>
+                This code will expire in 10 minutes.
+              </p>
+
+              <p>
+                If you did not request this code,
+                you can ignore this email.
+              </p>
+            </div>
+          `,
+        }),
+      }
+    );
+
+    const resendData = await resendResponse.json();
+
+    if (!resendResponse.ok) {
+      console.error(
+        "Resend email error:",
+        resendData
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to send verification code",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification code sent successfully",
+    });
   } catch (error) {
-    console.error("Send verification code error:", error);
+    console.error(
+      "Send verification code error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -63,73 +194,129 @@ export const sendVerificationCode = async (req, res) => {
 };
 
 // ======================================================
-// VERIFY MOBILE CODE   (POST /api/auth/verify-verification-code)
-// Body: { phone, verificationCode }
+// VERIFY EMAIL VERIFICATION CODE
 // ======================================================
 
-export const verifyVerificationCode = async (req, res) => {
+export const verifyVerificationCode = async (
+  req,
+  res
+) => {
   try {
-    const phone =
-      typeof req.body.phone === "string" ? req.body.phone.trim() : "";
-    const code =
-      typeof req.body.verificationCode === "string"
-        ? req.body.verificationCode.trim()
-        : "";
+    let { email, verificationCode } = req.body;
 
-    if (!phone || !code) {
+    email = email?.trim().toLowerCase();
+    verificationCode = verificationCode?.trim();
+
+    if (!email || !verificationCode) {
       return res.status(400).json({
         success: false,
-        message: "Mobile number and verification code are required",
+        message:
+          "Email and verification code are required",
       });
     }
 
-    if (!/^\d{6}$/.test(code)) {
+    if (!/^\d{6}$/.test(verificationCode)) {
       return res.status(400).json({
         success: false,
-        message: "Verification code must be 6 digits",
+        message:
+          "Verification code must be 6 digits",
       });
     }
 
-    const result = await checkPhoneOtp(phone, code);
+    const verification =
+      await EmailVerification.findOne({ email });
 
-    if (!result.ok) {
-      return res
-        .status(result.status)
-        .json({ success: false, message: result.message });
+    if (!verification) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification code not found. Please request a new code.",
+      });
+    }
+
+    if (verification.expiresAt < new Date()) {
+      await EmailVerification.deleteOne({
+        _id: verification._id,
+      });
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification code has expired. Please request a new code.",
+      });
+    }
+
+    if (verification.attempts >= 5) {
+      await EmailVerification.deleteOne({
+        _id: verification._id,
+      });
+
+      return res.status(429).json({
+        success: false,
+        message:
+          "Too many incorrect attempts. Please request a new code.",
+      });
+    }
+
+    const submittedOtpHash = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
+    if (
+      submittedOtpHash !== verification.otpHash
+    ) {
+      verification.attempts += 1;
+
+      await verification.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code",
+      });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Mobile number verified successfully",
+      message: "Email verified successfully",
     });
   } catch (error) {
-    console.error("Verify verification code error:", error);
+    console.error(
+      "Verify verification code error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Unable to verify verification code",
+      message:
+        "Unable to verify verification code",
     });
   }
 };
 
 // ======================================================
-// REGISTER USER   (POST /api/auth/register)
-// The mobile OTP is re-checked here, and on success the user is logged in
-// straight away (token returned) - no separate login step after sign-up.
+// REGISTER USER
 // ======================================================
 
 export const registerUser = async (req, res) => {
   try {
-    let { fullName, email, verificationCode, phone, address, pincode, password } =
-      req.body;
+    let {
+      fullName,
+      email,
+      verificationCode,
+      phone,
+      address,
+      pincode,
+      password,
+    } = req.body;
 
-    fullName = typeof fullName === "string" ? fullName.trim() : "";
-    email = typeof email === "string" ? email.trim().toLowerCase() : "";
+    fullName = fullName?.trim();
+    email = email?.trim().toLowerCase();
     verificationCode =
-      typeof verificationCode === "string" ? verificationCode.trim() : "";
-    phone = typeof phone === "string" ? phone.trim() : "";
-    address = typeof address === "string" ? address.trim() : "";
-    pincode = typeof pincode === "string" ? pincode.trim() : "";
+      verificationCode?.trim();
+    phone = phone?.trim();
+    address = address?.trim();
+    pincode = pincode?.trim();
 
     if (
       !fullName ||
@@ -138,7 +325,6 @@ export const registerUser = async (req, res) => {
       !phone ||
       !address ||
       !pincode ||
-      typeof password !== "string" ||
       !password
     ) {
       return res.status(400).json({
@@ -147,64 +333,126 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid email address",
-      });
-    }
-
     if (!/^\d{6}$/.test(verificationCode)) {
       return res.status(400).json({
         success: false,
-        message: "Verification code must be 6 digits",
+        message:
+          "Verification code must be 6 digits",
       });
     }
 
-    if (!INDIAN_MOBILE.test(phone)) {
+    if (!/^[6-9][0-9]{9}$/.test(phone)) {
       return res.status(400).json({
         success: false,
-        message: "Please enter a valid Indian mobile number",
+        message:
+          "Please enter a valid Indian mobile number",
       });
     }
 
     if (!/^[0-9]{6}$/.test(pincode)) {
       return res.status(400).json({
         success: false,
-        message: "Please enter a valid 6 digit pincode",
+        message:
+          "Please enter a valid 6 digit pincode",
       });
     }
 
     if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 8 characters",
+        message:
+          "Password must be at least 8 characters",
       });
     }
 
-    const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
+    // Check existing user
+    const existingUser =
+      await User.findOne({
+        $or: [
+          { email },
+          { phone },
+        ],
+      });
 
     if (existingUser) {
-      return res.status(409).json({
+      if (existingUser.email === email) {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already registered",
+        });
+      }
+
+      if (existingUser.phone === phone) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Phone number is already registered",
+        });
+      }
+    }
+
+    // Find OTP
+    const verification =
+      await EmailVerification.findOne({ email });
+
+    if (!verification) {
+      return res.status(400).json({
         success: false,
         message:
-          existingUser.phone === phone
-            ? "Mobile number is already registered"
-            : "Email is already registered",
+          "Verification code not found. Please request a new code.",
       });
     }
 
-    // Verify the mobile OTP on the server (never trust the client's word)
-    const otpResult = await checkPhoneOtp(phone, verificationCode);
+    // Check expiry
+    if (verification.expiresAt < new Date()) {
+      await EmailVerification.deleteOne({
+        _id: verification._id,
+      });
 
-    if (!otpResult.ok) {
-      return res
-        .status(otpResult.status)
-        .json({ success: false, message: otpResult.message });
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification code has expired. Please request a new code.",
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check attempts
+    if (verification.attempts >= 5) {
+      await EmailVerification.deleteOne({
+        _id: verification._id,
+      });
 
+      return res.status(429).json({
+        success: false,
+        message:
+          "Too many incorrect attempts. Please request a new code.",
+      });
+    }
+
+    // Verify OTP again on server
+    const submittedOtpHash = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
+    if (
+      submittedOtpHash !== verification.otpHash
+    ) {
+      verification.attempts += 1;
+
+      await verification.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code",
+      });
+    }
+
+    // Hash password
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
+
+    // Create user
     const user = await User.create({
       fullName,
       email,
@@ -213,35 +461,33 @@ export const registerUser = async (req, res) => {
       pincode,
       password: hashedPassword,
       role: "customer",
-      isVerified: true, // the mobile number was verified by OTP
+      isVerified: true,
     });
 
-    await consumePhoneOtp(otpResult.record);
-
-    // Log the new user in immediately
-    const token = generateToken(user._id, user.role);
+    // Delete OTP after successful registration
+    await EmailVerification.deleteOne({
+      _id: verification._id,
+    });
 
     return res.status(201).json({
       success: true,
       message: "Account created successfully",
-      token,
-      data: publicUser(user),
+      data: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        pincode: user.pincode,
+        role: user.role,
+        isVerified: user.isVerified,
+      },
     });
   } catch (error) {
-    // Duplicate key (two requests racing, or a stale unique index)
-    if (error?.code === 11000) {
-      const field = Object.keys(error.keyPattern || {})[0];
-
-      return res.status(409).json({
-        success: false,
-        message:
-          field === "phone"
-            ? "Mobile number is already registered"
-            : "Email is already registered",
-      });
-    }
-
-    console.error("Register user error:", error);
+    console.error(
+      "Register user error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -251,55 +497,74 @@ export const registerUser = async (req, res) => {
 };
 
 // ======================================================
-// LOGIN USER   (POST /api/auth/login)
-// Body: { identifier, password }  - identifier = email OR mobile number.
-// ({ email, password } still works for older clients.)
+// LOGIN USER
 // ======================================================
 
 export const loginUser = async (req, res) => {
   try {
-    const rawIdentifier = req.body.identifier ?? req.body.email;
-    const identifier =
-      typeof rawIdentifier === "string" ? rawIdentifier.trim().toLowerCase() : "";
-    const password = req.body.password;
+    let { email, password } = req.body;
 
-    if (!identifier || typeof password !== "string" || !password) {
+    email = email?.trim().toLowerCase();
+
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email or mobile number and password are required",
+        message:
+          "Email and password are required",
       });
     }
 
-    const user = await User.findOne({
-      $or: [{ email: identifier }, { phone: identifier }],
-    });
+    const user =
+      await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message:
+          "Invalid email or password",
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
 
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message:
+          "Invalid email or password",
       });
     }
 
-    const token = generateToken(user._id, user.role);
+    // Generate JWT token
+    const token = generateToken(
+      user._id,
+      user.role
+    );
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
       token,
-      data: publicUser(user),
+      data: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        pincode: user.pincode,
+        role: user.role,
+        isVerified: user.isVerified,
+      },
     });
   } catch (error) {
-    console.error("Login error:", error);
+    console.error(
+      "Login error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
