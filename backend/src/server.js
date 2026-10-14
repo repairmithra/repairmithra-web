@@ -11,6 +11,11 @@ console.log(
 );
 
 console.log(
+  "SMS_API_KEY loaded:",
+  Boolean(process.env.SMS_API_KEY)
+);
+
+console.log(
   "RAZORPAY_KEY_ID loaded:",
   Boolean(process.env.RAZORPAY_KEY_ID)
 );
