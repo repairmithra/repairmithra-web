@@ -19,7 +19,6 @@ import {
 import logo from "../../assets/images/repairmithra-logo.png";
 import technician from "../../assets/images/partner/technician-cutout.png";
 import { API_BASE } from "../../utils/api";
-import { setSession } from "../../utils/auth";
 
 function Registration() {
   const navigate = useNavigate();
@@ -96,18 +95,18 @@ function Registration() {
       setServerError("");
     }
 
-  };
+    // If email changes, old OTP is no longer valid
+    if (name === "email") {
+      setCodeSent(false);
+      setOtpVerified(false);
+      setResendCountdown(0);
 
-  // If the mobile number changes, the old OTP is no longer valid
-  const resetOtp = () => {
-    setCodeSent(false);
-    setOtpVerified(false);
-    setResendCountdown(0);
-
-    setFormData((previous) => ({
-      ...previous,
-      verificationCode: "",
-    }));
+      setFormData((previous) => ({
+        ...previous,
+        email: value,
+        verificationCode: "",
+      }));
+    }
   };
 
   // ==========================================
@@ -153,15 +152,15 @@ function Registration() {
     }
 
     // ------------------------------------------
-    // MOBILE VERIFICATION CODE
+    // VERIFICATION CODE
     // ------------------------------------------
 
     if (!codeSent) {
       newErrors.verificationCode =
-        "Please send the verification code to your mobile first";
+        "Please send the verification code first";
     } else if (!formData.verificationCode.trim()) {
       newErrors.verificationCode =
-        "Mobile verification code is required";
+        "Email verification code is required";
     } else if (
       !/^\d{6}$/.test(
         formData.verificationCode
@@ -171,7 +170,7 @@ function Registration() {
         "Verification code must be 6 digits";
     } else if (!otpVerified) {
       newErrors.verificationCode =
-        "Please verify your mobile number first";
+        "Please verify your email first";
     }
 
     // ------------------------------------------
@@ -267,26 +266,31 @@ function Registration() {
   // ==========================================
 
   const sendVerificationCode = async () => {
-    const phone = formData.phone.trim();
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    const email = formData.email.trim();
 
     // Don't allow resend during countdown
     if (resendCountdown > 0) {
       return;
     }
 
-    // Validate the mobile number first
-    if (!phone) {
+    // Validate email first
+    if (!email) {
       setErrors((previous) => ({
         ...previous,
-        phone: "Enter your mobile number first",
+        email:
+          "Enter your email address first",
       }));
       return;
     }
 
-    if (!/^[6-9]\d{9}$/.test(phone)) {
+    if (!emailRegex.test(email)) {
       setErrors((previous) => ({
         ...previous,
-        phone: "Enter a valid 10-digit Indian mobile number",
+        email:
+          "Enter a valid email address",
       }));
       return;
     }
@@ -303,7 +307,7 @@ function Registration() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            phone,
+            email,
           }),
         }
       );
@@ -335,7 +339,7 @@ function Registration() {
 
       setErrors((previous) => ({
         ...previous,
-        phone: "",
+        email: "",
         verificationCode: "",
       }));
 
@@ -371,7 +375,7 @@ function Registration() {
   const verifyOtp = async () => {
     setServerError("");
 
-    const phone = formData.phone.trim();
+    const email = formData.email.trim().toLowerCase();
     const verificationCode = formData.verificationCode.trim();
 
     if (!codeSent) {
@@ -404,7 +408,7 @@ function Registration() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            phone,
+            email,
             verificationCode,
           }),
         }
@@ -509,11 +513,17 @@ function Registration() {
         );
       }
 
-      // The server logs the new user in as part of registration, so there
-      // is no separate login step: save the session and go straight in.
-      setSession(data.token, data.data);
+      alert(
+        "Account created successfully!"
+      );
 
-      navigate("/", { replace: true });
+      navigate("/login", {
+        replace: true,
+        state: {
+          message:
+            "Account created successfully. Please login.",
+        },
+      });
     } catch (error) {
       console.error(
         "Registration error:",
@@ -984,94 +994,7 @@ function Registration() {
 
             </div>
 
-            {/* PHONE */}
-
-            <div className="mb-[15px]">
-
-              <div className="relative">
-
-                <FiPhone
-                  className="
-                    absolute
-                    left-3
-                    top-1/2
-                    -translate-y-1/2
-                    text-[#6685a5]
-                    z-10
-                  "
-                  size={20}
-                />
-
-                <span
-                  className="
-                    absolute
-                    left-[52px]
-                    top-1/2
-                    -translate-y-1/2
-                    text-[15px]
-                    text-[#426887]
-                    pr-[10px]
-                    border-r
-                    border-[#d8e3ee]
-                    z-10
-                  "
-                >
-                  +91
-                </span>
-
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={(e) => {
-                    const value =
-                      e.target.value.replace(
-                        /\D/g,
-                        ""
-                      );
-
-                    if (value.length <= 10) {
-                      if (value !== formData.phone) {
-                        resetOtp();
-                      }
-
-                      setFormData(
-                        (previous) => ({
-                          ...previous,
-                          phone: value,
-                        })
-                      );
-
-                      if (errors.phone) {
-                        setErrors(
-                          (previous) => ({
-                            ...previous,
-                            phone: "",
-                          })
-                        );
-                      }
-                    }
-                  }}
-                  placeholder="Phone Number *"
-                  maxLength={10}
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  className={`${inputClass(
-                    "phone"
-                  )} pl-[105px]`}
-                />
-
-              </div>
-
-              {errors.phone && (
-                <p className="mt-1.5 text-xs text-red-600">
-                  {errors.phone}
-                </p>
-              )}
-
-            </div>
-
-            {/* MOBILE VERIFICATION CODE */}
+            {/* EMAIL VERIFICATION CODE */}
 
             <div className="mb-[15px]">
 
@@ -1129,7 +1052,7 @@ function Registration() {
                       }
                     }
                   }}
-                  placeholder="Mobile Verification Code *"
+                  placeholder="Email Verification Code *"
                   maxLength={6}
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -1197,7 +1120,7 @@ function Registration() {
                 !otpVerified &&
                 !errors.verificationCode && (
                   <p className="mt-1.5 text-xs text-green-600">
-                    Verification code sent to +91 {formData.phone} by SMS.
+                    Verification code sent to your email.
                   </p>
                 )}
 
@@ -1234,7 +1157,90 @@ function Registration() {
 
               {otpVerified && (
                 <p className="mt-2 text-sm text-green-600 font-semibold">
-                  ✓ Mobile number verified successfully
+                  ✓ Email verified successfully
+                </p>
+              )}
+
+            </div>
+
+            {/* PHONE */}
+
+            <div className="mb-[15px]">
+
+              <div className="relative">
+
+                <FiPhone
+                  className="
+                    absolute
+                    left-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-[#6685a5]
+                    z-10
+                  "
+                  size={20}
+                />
+
+                <span
+                  className="
+                    absolute
+                    left-[52px]
+                    top-1/2
+                    -translate-y-1/2
+                    text-[15px]
+                    text-[#426887]
+                    pr-[10px]
+                    border-r
+                    border-[#d8e3ee]
+                    z-10
+                  "
+                >
+                  +91
+                </span>
+
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={(e) => {
+                    const value =
+                      e.target.value.replace(
+                        /\D/g,
+                        ""
+                      );
+
+                    if (value.length <= 10) {
+                      setFormData(
+                        (previous) => ({
+                          ...previous,
+                          phone: value,
+                        })
+                      );
+
+                      if (errors.phone) {
+                        setErrors(
+                          (previous) => ({
+                            ...previous,
+                            phone: "",
+                          })
+                        );
+                      }
+                    }
+                  }}
+                  placeholder="Phone Number *"
+                  maxLength={10}
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  className={`${inputClass(
+                    "phone"
+                  )} pl-[105px]`}
+                />
+
+              </div>
+
+              {errors.phone && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.phone}
                 </p>
               )}
 

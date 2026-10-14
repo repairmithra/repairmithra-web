@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FiUser, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
+import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
 import { setSession, getStoredUser, isTechnician } from "../../utils/auth";
@@ -16,7 +16,7 @@ function Login() {
   const existingUser = getStoredUser();
   const switchingFromPartner = isTechnician(existingUser);
 
-  const [formData, setFormData] = useState({ identifier: "", password: "" });
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
@@ -38,15 +38,10 @@ function Login() {
   const validate = () => {
     const newErrors = {};
 
-    const identifier = formData.identifier.trim();
-
-    if (!identifier) {
-      newErrors.identifier = "Email or mobile number is required";
-    } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier) &&
-      !/^[6-9]\d{9}$/.test(identifier)
-    ) {
-      newErrors.identifier = "Enter a valid email or 10-digit mobile number";
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+} else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {     
+   newErrors.email = "Enter a valid email address";
     }
 
     if (!formData.password) {
@@ -72,7 +67,7 @@ function Login() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          identifier: formData.identifier.trim(),
+          email: formData.email.trim(),
           password: formData.password,
         }),
       });
@@ -85,7 +80,7 @@ function Login() {
       }
 
       if (!response.ok || !data.success) {
-        throw new Error(data.message || "Invalid credentials");
+        throw new Error(data.message || "Invalid email or password");
       }
 
       // Save the session. The navbar etc. update straight away.
@@ -144,30 +139,30 @@ function Login() {
 
           <form onSubmit={handleSubmit} noValidate>
 
-            {/* Email or mobile */}
+            {/* Email */}
             <div className="mb-5">
-              <label htmlFor="identifier" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email or Mobile Number
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Email
               </label>
               <div className="relative">
-                <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
-                  id="identifier"
-                  name="identifier"
-                  type="text"
-                  autoComplete="username"
-                  value={formData.identifier}
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={formData.email}
                   onChange={handleChange}
-                  placeholder="you@example.com or 9876543210"
+                  placeholder="you@example.com"
                   className={`w-full rounded-xl border py-3 pl-10 pr-4 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
-                    errors.identifier
+                    errors.email
                       ? "border-red-400 focus:ring-red-200"
                       : "border-gray-300 focus:ring-blue-200 focus:border-blue-500"
                   }`}
                 />
               </div>
-              {errors.identifier && (
-                <p className="mt-1.5 text-xs text-red-600">{errors.identifier}</p>
+              {errors.email && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.email}</p>
               )}
             </div>
 

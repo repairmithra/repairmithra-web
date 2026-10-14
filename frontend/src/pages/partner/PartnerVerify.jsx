@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FiSmartphone, FiAlertCircle, FiArrowLeft, FiInfo } from "react-icons/fi";
+import { FiMail, FiAlertCircle, FiArrowLeft, FiInfo } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
 import { setSession } from "../../utils/auth";
@@ -30,7 +30,7 @@ function PartnerVerify() {
     const stored = sessionStorage.getItem("rm_pending_partner");
     const parsed = stored ? JSON.parse(stored) : null;
 
-    if (!parsed || !parsed.phone) {
+    if (!parsed || !parsed.email) {
       navigate("/partner/register", { replace: true });
       return;
     }
@@ -49,7 +49,7 @@ function PartnerVerify() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const phone = pending?.phone || "";
+  const email = pending?.email || "";
 
   const handleDigitChange = (index, value) => {
     const clean = value.replace(/\D/g, "").slice(-1);
@@ -80,12 +80,12 @@ function PartnerVerify() {
   };
 
   const handleResend = async () => {
-    if (countdown > 0 || !phone) return;
+    if (countdown > 0 || !email) return;
     setIsResending(true);
     setServerError("");
 
     try {
-      const response = await sendPartnerOtp(phone);
+      const response = await sendPartnerOtp(email);
       setCountdown(RESEND_SECONDS);
 
       if (response?.devOtp) {
@@ -155,13 +155,13 @@ function PartnerVerify() {
 
           <div className="flex flex-col items-center text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-              <FiSmartphone size={28} />
+              <FiMail size={28} />
             </div>
             <h1 className="text-xl font-bold text-slate-900">Verify Your Account</h1>
             <p className="mt-1 text-sm text-slate-500">
-              We have sent a 6-digit OTP by SMS to
+              We have sent a 6-digit OTP to
               <br />
-              <span className="font-semibold text-slate-700">+91 {phone}</span>
+              <span className="font-semibold text-slate-700">{email}</span>
             </p>
           </div>
 
@@ -169,7 +169,7 @@ function PartnerVerify() {
             <div className="mt-5 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <FiInfo className="mt-0.5 shrink-0" size={16} />
               <span>
-                Dev mode: no SMS is actually sent. Your verification code is{" "}
+                Demo mode: no email is actually sent. Your verification code is{" "}
                 <span className="font-bold tracking-widest">{demoOtp}</span> (already
                 filled in below).
               </span>
