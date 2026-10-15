@@ -95,6 +95,17 @@ const seedPartnerDemo = async () => {
       console.log("✅ Demo technician profile updated");
     }
 
+    // Demo partners need an active subscription to accept requests.
+    technicianProfile.subscription = {
+      plan: "all",
+      services: await Service.find({ isActive: true }).distinct("_id"),
+      amount: 500,
+      startedAt: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    };
+    await technicianProfile.save();
+    console.log("✅ Demo partner subscribed to the All Services plan (30 days)");
+
     // A demo customer, so bookings have someone to point to
     let customer = await User.findOne({ email: "demo.customer@repairmithra.com" });
 

@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { PLAN_KEYS } from "../config/subscriptionPlans.js";
+
 const technicianSchema = new mongoose.Schema(
   {
     // Technician's user account
@@ -122,6 +124,20 @@ const technicianSchema = new mongoose.Schema(
       ],
       default: [],
       select: false,
+    },
+
+    // ----------------------------------------------------------------
+    // Partner subscription. Partners are notified about every request in
+    // their area, but can only ACCEPT services covered by an active plan.
+    // Written only by the server after a verified payment.
+    // ----------------------------------------------------------------
+    subscription: {
+      plan: { type: String, enum: PLAN_KEYS },
+      // Subscribed services (for the "all" plan: every active service at purchase time)
+      services: [{ type: mongoose.Schema.Types.ObjectId, ref: "Service" }],
+      amount: { type: Number, min: 0 },
+      startedAt: { type: Date },
+      expiresAt: { type: Date },
     },
 
     ratingSum: {

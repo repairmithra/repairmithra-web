@@ -7,7 +7,7 @@ import { TIME_SLOTS, dayRange } from "./schedule.js";
 // assignNearestTechnician(booking)
 //
 // Called right after a booking's visit fee is paid. Finds the nearest
-// available technician (who offers this service, isn't already busy in the
+// available technician (isn't already busy in the
 // same slot, and hasn't already rejected this exact job) and "offers" the
 // job to them: booking.technician is set, technicianResponseStatus is set to
 // "pending", and it will show up as a "New Request" on that partner's
@@ -39,8 +39,10 @@ export const assignNearestTechnician = async (booking) => {
       ...(booking.rejectedTechnicians || []),
     ];
 
+    // Partners are notified about EVERY service request in their area, no
+    // matter which services their subscription covers. The subscription is
+    // enforced later, when they try to accept (see acceptJob).
     const query = {
-      services: booking.service,
       isActive: true,
       isAvailable: true,
 

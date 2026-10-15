@@ -19,6 +19,12 @@ import {
   getPartnerEarnings,
 } from "../controllers/partnerController.js";
 
+import {
+  getSubscription,
+  createSubscriptionOrder,
+  verifySubscriptionPayment,
+} from "../controllers/partnerSubscriptionController.js";
+
 import authMiddleware from "../middleware/authMiddleware.js";
 import technicianMiddleware from "../middleware/technicianMiddleware.js";
 
@@ -76,6 +82,13 @@ router.get("/jobs/:id", getPartnerJobById);
 router.post("/jobs/:id/accept", acceptJob);
 router.post("/jobs/:id/reject", rejectJob);
 router.post("/jobs/:id/status", updateJobStatus);
+
+// ======================================================
+// SUBSCRIPTION (plans, purchase, upgrade, renewal)
+// ======================================================
+router.get("/subscription", getSubscription);
+router.post("/subscription/order", createSubscriptionOrder);
+router.post("/subscription/verify", verifySubscriptionPayment);
 
 // ======================================================
 // EARNINGS (Step 8)

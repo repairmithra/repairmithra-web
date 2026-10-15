@@ -12,6 +12,7 @@ import PasswordReset from "../models/PasswordReset.js";
 import generateToken from "../utils/generateToken.js";
 import { isObjectId, isValidLatLng, toCoordinate } from "../utils/validators.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
+import { checkAcceptAccess, serializeSubscription } from "../utils/subscription.js";
 
 const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "");
 
@@ -745,7 +746,8 @@ export const getPartnerProfile = async (req, res) => {
   try {
     const technician = await Technician.findOne({ user: req.user._id })
       .select(PROFILE_EXTRAS)
-      .populate("services", "name slug");
+      .populate("services", "name slug")
+      .populate("subscription.services", "name slug");
 
     if (!technician) {
       return res.status(404).json({
@@ -759,6 +761,7 @@ export const getPartnerProfile = async (req, res) => {
       data: {
         user: req.user,
         technician: toClientTechnician(technician),
+        subscription: serializeSubscription(technician),
         avgRating:
           technician.ratingCount > 0
             ? Number((technician.ratingSum / technician.ratingCount).toFixed(1))
@@ -826,13 +829,9 @@ export const updatePartnerProfile = async (req, res) => {
     }
     if (typeof isAvailable === "boolean") technician.isAvailable = isAvailable;
 
-    if (Array.isArray(req.body.serviceIds) && req.body.serviceIds.length > 0) {
-      if (!req.body.serviceIds.every(isObjectId)) {
-        return res.status(400).json({ success: false, message: "Invalid service selected" });
-      }
-      const services = await Service.find({ _id: { $in: req.body.serviceIds }, isActive: true });
-      technician.services = services.map((s) => s._id);
-    }
+    // NOTE: `serviceIds` is deliberately ignored here. The services a partner
+    // can accept are decided by their paid subscription
+    // (POST /api/partner/subscription/order + /verify), not by profile edits.
 
     if (req.body.workingHours !== undefined) {
       const r = parseWorkingHours(req.body.workingHours);
@@ -884,7 +883,15 @@ export const getPartnerDashboard = async (req, res) => {
   try {
     const technicianUserId = req.user._id;
 
-    const [newRequests, acceptedJobs, activeServices, completedJobs, earningsAgg, recentRequests] =
+    const [
+      newRequests,
+      acceptedJobs,
+      activeServices,
+      completedJobs,
+      earningsAgg,
+      recentRequests,
+      technicianDoc,
+    ] =
       await Promise.all([
         Booking.countDocuments({
   offeredTechnicians: technicianUserId,
@@ -926,6 +933,10 @@ export const getPartnerDashboard = async (req, res) => {
           .populate("customer", "fullName")
           .sort({ createdAt: -1 })
           .limit(5),
+        Technician.findOne({ user: technicianUserId }).populate(
+          "subscription.services",
+          "name slug"
+        ),
       ]);
 
     const totalEarnings = earningsAgg[0]?.total || 0;
@@ -950,7 +961,9 @@ export const getPartnerDashboard = async (req, res) => {
           bookingDate: b.bookingDate,
           timeSlot: b.timeSlot,
           visitFee: b.service?.visitFee ?? null,
+          canAccept: checkAcceptAccess(technicianDoc, b.service?._id).allowed,
         })),
+        subscription: serializeSubscription(technicianDoc),
       },
     });
   } catch (error) {
@@ -1000,25 +1013,45 @@ export const getPartnerJobs = async (req, res) => {
     const filterKey = req.query.status;
     const extraFilter = STATUS_FILTERS[filterKey] || {};
 
-    const bookings = await Booking.find({
-      ...extraFilter,
-      $or: [
-        {
-          offeredTechnicians: req.user._id,
-          technician: null,
-        },
-        {
-          technician: req.user._id,
-        },
-      ],
-    })
-      .populate("service", "name slug visitFee")
-      .populate("customer", "fullName phone")
-      .sort({ createdAt: -1 });
+    const [bookings, technician] = await Promise.all([
+      Booking.find({
+        ...extraFilter,
+        $or: [
+          {
+            offeredTechnicians: req.user._id,
+            technician: null,
+          },
+          {
+            technician: req.user._id,
+          },
+        ],
+      })
+        .populate("service", "name slug visitFee estimatedCostMin estimatedCostMax")
+        .populate("customer", "fullName phone")
+        .sort({ createdAt: -1 }),
+      Technician.findOne({ user: req.user._id }).select("subscription"),
+    ]);
+
+    // Every partner is notified about every request, but only the ones
+    // covered by an active plan can be accepted. Tell the UI which is which.
+    // The customer's phone is only revealed once the partner has the job.
+    const annotated = bookings.map((b) => {
+      const job = b.toObject();
+      const isOffer = !job.technician;
+
+      if (isOffer) {
+        const access = checkAcceptAccess(technician, job.service?._id);
+        job.canAccept = access.allowed;
+        job.acceptBlockedCode = access.allowed ? null : access.code;
+        if (job.customer) delete job.customer.phone;
+      }
+
+      return job;
+    });
 
     return res.status(200).json({
       success: true,
-      bookings,
+      bookings: annotated,
     });
   } catch (error) {
     console.error("Get partner jobs error:", error);
@@ -1038,12 +1071,28 @@ export const getPartnerJobById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Job not found" });
     }
 
-    const booking = await Booking.findOne({ _id: id, technician: req.user._id })
+    // The partner's own job, or a request that was offered to them and is
+    // still open (so "View Details" works on the New Requests tab).
+    const booking = await Booking.findOne({
+      _id: id,
+      $or: [
+        { technician: req.user._id },
+        { technician: null, offeredTechnicians: req.user._id },
+      ],
+    })
       .populate("service", "name slug visitFee estimatedCostMin estimatedCostMax")
       .populate("customer", "fullName phone");
 
     if (!booking) {
       return res.status(404).json({ success: false, message: "Job not found" });
+    }
+
+    const isOffer = !booking.technician;
+    let access = { allowed: true };
+
+    if (isOffer) {
+      const technician = await Technician.findOne({ user: req.user._id }).select("subscription");
+      access = checkAcceptAccess(technician, booking.service?._id);
     }
 
     const payment = await Payment.findOne({ booking: booking._id }).select(
@@ -1055,6 +1104,14 @@ export const getPartnerJobById = async (req, res) => {
       booking: {
         ...booking.toObject(),
         visitFeePaid: payment?.status === "paid" ? payment.amount : null,
+        ...(isOffer
+          ? {
+              canAccept: access.allowed,
+              acceptBlockedCode: access.allowed ? null : access.code,
+              acceptBlockedMessage: access.allowed ? null : access.message,
+              customer: { fullName: booking.customer?.fullName }, // no phone before accepting
+            }
+          : {}),
       },
     });
   } catch (error) {
@@ -1080,6 +1137,30 @@ export const acceptJob = async (req, res) => {
         success: false,
         message: "Job not found",
       });
+    }
+
+    // Subscription gate: partners are notified about every request, but may
+    // only ACCEPT services covered by an active subscription.
+    const offered = await Booking.findOne({
+      _id: id,
+      technician: null,
+      offeredTechnicians: req.user._id,
+    }).select("service");
+
+    if (offered) {
+      const technician = await Technician.findOne({ user: req.user._id }).select(
+        "subscription"
+      );
+      const access = checkAcceptAccess(technician, offered.service);
+
+      if (!access.allowed) {
+        return res.status(403).json({
+          success: false,
+          code: access.code,
+          upgradeRequired: true,
+          message: access.message,
+        });
+      }
     }
 
     // Atomic acceptance:
