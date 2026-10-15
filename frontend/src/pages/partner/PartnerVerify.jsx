@@ -123,7 +123,8 @@ function PartnerVerify() {
       sessionStorage.removeItem("rm_pending_partner");
       setSession(data.token, data.data);
 
-      navigate("/partner/dashboard", { replace: true });
+      // New partners must pick a subscription plan before they can accept jobs.
+      navigate("/partner/subscription", { replace: true });
     } catch (err) {
       setServerError(
         err instanceof ApiError ? err.message : "Something went wrong. Please try again."

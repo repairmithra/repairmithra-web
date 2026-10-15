@@ -116,6 +116,63 @@ function PartnerDashboard() {
           </div>
         )}
 
+        {/* Subscription status */}
+        {data?.subscription && (
+          <section
+            className={`flex flex-col gap-3 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${
+              data.subscription.active
+                ? "border-emerald-200 bg-emerald-50/60"
+                : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                  data.subscription.active
+                    ? "bg-emerald-100 text-emerald-600"
+                    : "bg-amber-100 text-amber-600"
+                }`}
+              >
+                {data.subscription.active ? <FiCheckCircle size={20} /> : <FiAlertCircle size={20} />}
+              </span>
+              <div>
+                {data.subscription.active ? (
+                  <>
+                    <p className="font-bold text-slate-900">
+                      {data.subscription.planName} plan · active
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      {data.subscription.daysLeft} day{data.subscription.daysLeft === 1 ? "" : "s"} left
+                      {data.subscription.daysLeft <= 5 ? " - renew soon to keep accepting jobs" : ""}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-slate-900">
+                      {data.subscription.status === "expired"
+                        ? "Your subscription has expired"
+                        : "Subscribe to start accepting jobs"}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      You still get every request notification - plans start at ₹100/month.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => navigate("/partner/subscription")}
+              className={`shrink-0 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition ${
+                data.subscription.active
+                  ? "bg-emerald-600 hover:bg-emerald-700"
+                  : "bg-amber-500 hover:bg-amber-600"
+              }`}
+            >
+              {data.subscription.active ? "Manage / Upgrade" : "View Plans"}
+            </button>
+          </section>
+        )}
+
         {/* Hero banner */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white">
           <img

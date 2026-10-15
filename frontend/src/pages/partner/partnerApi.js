@@ -56,3 +56,22 @@ export const getPartnerEarnings = (signal) =>
   apiFetch("/api/partner/earnings", { auth: true, signal });
 
 export const getServices = (signal) => apiFetch("/api/services", { signal });
+
+// ---- Subscription ----------------------------------------------------------
+
+export const getPartnerSubscription = (signal) =>
+  apiFetch("/api/partner/subscription", { auth: true, signal });
+
+export const createSubscriptionOrder = (plan, serviceIds) =>
+  apiFetch("/api/partner/subscription/order", {
+    method: "POST",
+    auth: true,
+    body: { plan, serviceIds },
+  });
+
+export const verifySubscriptionPayment = (payload) =>
+  apiFetch("/api/partner/subscription/verify", {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });

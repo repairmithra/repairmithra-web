@@ -27,13 +27,14 @@ import PartnerJobDetails from "./pages/partner/PartnerJobDetails";
 import PartnerEarnings from "./pages/partner/PartnerEarnings";
 import PartnerProfile from "./pages/partner/PartnerProfile";
 import PartnerGrowWithUs from "./pages/partner/PartnerGrowWithUs";
+import PartnerSubscription from "./pages/partner/PartnerSubscription";
 
 // The logged-in partner app (dashboard, jobs, earnings, profile) has its own
 // PartnerHeader and should not show the customer site's Navbar/Footer.
 // Grow-with-Us also has its own header (logo + menu) matching the design.
 // Partner Register/Verify/Login stay inside the normal site chrome, same as
 // the customer Login/Registration pages.
-const PARTNER_APP_PATTERN = /^\/partner\/(dashboard|jobs|earnings|profile|grow)/;
+const PARTNER_APP_PATTERN = /^\/partner\/(dashboard|jobs|earnings|profile|grow|subscription)/;
 
 function App() {
   const location = useLocation();
@@ -71,6 +72,7 @@ function App() {
         <Route path="/partner/earnings" element={<PartnerEarnings />} />
         <Route path="/partner/profile" element={<PartnerProfile />} />
         <Route path="/partner/grow" element={<PartnerGrowWithUs />} />
+        <Route path="/partner/subscription" element={<PartnerSubscription />} />
       </Routes>
 
       {!isPartnerApp && <Footer />}

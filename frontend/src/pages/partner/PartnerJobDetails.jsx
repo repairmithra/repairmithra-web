@@ -100,7 +100,21 @@ function PartnerJobDetails() {
       await acceptPartnerJob(id);
       await load();
     } catch (err) {
-      setError(err.message || "Could not accept the job");
+      if (err?.data?.upgradeRequired) {
+        // Plan doesn't cover this service: show the upgrade prompt below.
+        setBooking((b) =>
+          b
+            ? {
+                ...b,
+                canAccept: false,
+                acceptBlockedCode: err.data.code,
+                acceptBlockedMessage: err.message,
+              }
+            : b
+        );
+      } else {
+        setError(err.message || "Could not accept the job");
+      }
     } finally {
       setBusy(false);
     }
@@ -246,15 +260,40 @@ function PartnerJobDetails() {
             </div>
           )}
 
+          {isNewRequest && booking.canAccept === false && (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <p className="flex items-start gap-2">
+                <FiAlertCircle className="mt-0.5 shrink-0" size={16} />
+                {booking.acceptBlockedMessage ||
+                  "This service is not included in your plan. Upgrade your subscription to accept it."}
+              </p>
+            </div>
+          )}
+
           {isNewRequest && (
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={handleAccept}
-                disabled={busy}
-                className="flex-1 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-              >
-                Accept
-              </button>
+            <div className="mt-4 flex gap-3">
+              {booking.canAccept === false ? (
+                <button
+                  onClick={() =>
+                    navigate("/partner/subscription", {
+                      state: { returnTo: `/partner/jobs/${id}` },
+                    })
+                  }
+                  className="flex-1 rounded-xl bg-amber-500 py-3 font-semibold text-white transition hover:bg-amber-600"
+                >
+                  {booking.acceptBlockedCode === "SERVICE_NOT_IN_PLAN"
+                    ? "Upgrade to Accept"
+                    : "Subscribe to Accept"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleAccept}
+                  disabled={busy}
+                  className="flex-1 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  Accept
+                </button>
+              )}
               <button
                 onClick={handleReject}
                 disabled={busy}

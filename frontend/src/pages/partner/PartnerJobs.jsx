@@ -136,6 +136,8 @@ function PartnerJobs() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [actioningId, setActioningId] = useState(null);
+  // Set when accepting is blocked because the plan does not cover the service.
+  const [upgradeMessage, setUpgradeMessage] = useState("");
 
   const [sort, setSort] = useState("newest");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -197,13 +199,22 @@ function PartnerJobs() {
     load();
   };
 
+  const goToPlans = () =>
+    navigate("/partner/subscription", { state: { returnTo: "/partner/jobs?tab=new" } });
+
   const handleAccept = async (id) => {
     setActioningId(id);
+    setError("");
+    setUpgradeMessage("");
     try {
       await acceptPartnerJob(id);
       navigate(`/partner/jobs/${id}`);
     } catch (err) {
-      setError(err.message || "Could not accept the job");
+      if (err?.data?.upgradeRequired) {
+        setUpgradeMessage(err.message);
+      } else {
+        setError(err.message || "Could not accept the job");
+      }
     } finally {
       setActioningId(null);
     }
@@ -417,6 +428,21 @@ function PartnerJobs() {
           </div>
         )}
 
+        {upgradeMessage && (
+          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex items-start gap-2">
+              <FiAlertCircle className="mt-0.5 shrink-0" size={16} />
+              {upgradeMessage}
+            </span>
+            <button
+              onClick={goToPlans}
+              className="shrink-0 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+            >
+              View Plans
+            </button>
+          </div>
+        )}
+
         {/* Request cards */}
         {loading ? (
           <p className="py-10 text-center text-sm text-slate-500">Loading requests...</p>
@@ -497,15 +523,25 @@ function PartnerJobs() {
 
                   {/* Actions */}
                   <div className={`grid gap-3 lg:block lg:space-y-2.5 lg:border-l lg:border-gray-100 lg:pl-5 ${isNew ? "grid-cols-2" : "grid-cols-1"}`}>
-                    {isNew && (
-                      <button
-                        onClick={() => handleAccept(b._id)}
-                        disabled={actioningId === b._id}
-                        className="w-full rounded-md bg-emerald-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
-                      >
-                        Accept Request
-                      </button>
-                    )}
+                    {isNew &&
+                      (b.canAccept === false ? (
+                        <button
+                          onClick={goToPlans}
+                          className="w-full rounded-md bg-amber-500 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600"
+                        >
+                          {b.acceptBlockedCode === "SERVICE_NOT_IN_PLAN"
+                            ? "Upgrade to Accept"
+                            : "Subscribe to Accept"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAccept(b._id)}
+                          disabled={actioningId === b._id}
+                          className="w-full rounded-md bg-emerald-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
+                        >
+                          Accept Request
+                        </button>
+                      ))}
                     <button
                       onClick={() => navigate(`/partner/jobs/${b._id}`)}
                       className="w-full rounded-md border border-emerald-600 bg-white py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"

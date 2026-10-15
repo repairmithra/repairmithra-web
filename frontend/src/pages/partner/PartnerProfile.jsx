@@ -29,7 +29,12 @@ import {
   getBankStatus,
   getDocumentsStatus,
 } from "./components/ProfileSections";
-import { getPartnerProfile, updatePartnerProfile, getServices } from "./partnerApi";
+import {
+  getPartnerProfile,
+  updatePartnerProfile,
+  getServices,
+  getPartnerSubscription,
+} from "./partnerApi";
 
 // Services arrive either populated ({ _id, name }) or as bare ids, depending on
 // which endpoint returned them — accept both.
@@ -45,7 +50,9 @@ function PartnerProfile() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
-  const [expanded, setExpanded] = useState(null);
+  // Subscription plans open by default so the partner sees them right away.
+  const [expanded, setExpanded] = useState("subscription");
+  const [plans, setPlans] = useState([]);
   const [savingAvailability, setSavingAvailability] = useState(false);
   const successTimer = useRef(null);
 
@@ -62,12 +69,15 @@ function PartnerProfile() {
   const load = useCallback(
     async (signal) => {
       try {
-        const [profileRes, servicesRes] = await Promise.all([
+        const [profileRes, servicesRes, subRes] = await Promise.all([
           getPartnerProfile(signal),
           getServices(signal),
+          // A failure here must not stop the rest of the profile from loading.
+          getPartnerSubscription(signal).catch(() => null),
         ]);
 
         setProfile(profileRes.data);
+        setPlans(subRes?.data?.plans || []);
         setServices(servicesRes.services || []);
         setForm({
           fullName: profileRes.data.user.fullName || "",
@@ -102,15 +112,6 @@ function PartnerProfile() {
     return () => controller.abort();
   }, [load, navigate]);
 
-  const toggleService = (id) => {
-    setForm((prev) => ({
-      ...prev,
-      serviceIds: prev.serviceIds.includes(id)
-        ? prev.serviceIds.filter((s) => s !== id)
-        : [...prev.serviceIds, id],
-    }));
-  };
-
   // Show a message at the top of the page and scroll there, so the result of a
   // "Save Changes" button at the bottom of a long list is never out of sight.
   const showMessage = (type, text) => {
@@ -131,9 +132,6 @@ function PartnerProfile() {
       if (!/^[6-9]\d{9}$/.test(form.phone)) {
         return "Enter a valid 10-digit mobile number.";
       }
-    }
-    if (section === "services" && form.serviceIds.length === 0) {
-      return "Select at least one service category.";
     }
     if (section === "area" && form.city.trim().length < 2) {
       return "Please enter your service area.";
@@ -275,6 +273,14 @@ function PartnerProfile() {
 
   const MENU_ITEMS = [
     { key: "personal", label: "Personal Details", icon: FiUser },
+    {
+      key: "subscription",
+      label: "Subscription Plans",
+      icon: FiCreditCard,
+      status: profile?.subscription?.active
+        ? { label: "Active", tone: "green" }
+        : { label: "Not subscribed", tone: "amber" },
+    },
     { key: "services", label: "Service Categories", icon: FiTool },
     { key: "area", label: "Service Area", icon: FiMapPin },
     { key: "hours", label: "Working Hours", icon: FiClock, status: getHoursStatus(profile?.technician?.workingHours) },
@@ -405,32 +411,103 @@ function PartnerProfile() {
                 </div>
               )}
 
-              {expanded === "services" && key === "services" && (
-                <div className="px-5 pb-5">
-                  <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {services.map((service) => {
-                      const active = form.serviceIds.includes(service._id);
+              {expanded === "subscription" && key === "subscription" && (
+                <div className="space-y-3 px-5 pb-5">
+                  {profile?.subscription?.active ? (
+                    <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                      <p className="font-semibold">
+                        Current plan: {profile.subscription.planName} · ₹{profile.subscription.amount}/month
+                      </p>
+                      <p className="mt-0.5 text-emerald-700">
+                        Valid till{" "}
+                        {new Date(profile.subscription.expiresAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}{" "}
+                        ({profile.subscription.daysLeft} day
+                        {profile.subscription.daysLeft === 1 ? "" : "s"} left)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      You don&apos;t have an active subscription. You still get all request
+                      notifications, but you need a plan to accept jobs.
+                    </div>
+                  )}
+
+                  <ul className="space-y-2">
+                    {plans.map((plan) => {
+                      const isCurrent =
+                        profile?.subscription?.active && profile.subscription.plan === plan.key;
                       return (
-                        <button
-                          key={service._id}
-                          onClick={() => toggleService(service._id)}
-                          className={`rounded-xl border px-3 py-2 text-left text-sm font-medium transition ${
-                            active
-                              ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                              : "border-gray-300 text-slate-600 hover:border-emerald-300"
+                        <li
+                          key={plan.key}
+                          className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
+                            isCurrent ? "border-emerald-500 bg-emerald-50/60" : "border-gray-200"
                           }`}
                         >
-                          {service.name}
-                        </button>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {plan.name}
+                              {isCurrent && (
+                                <span className="ml-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                  Current
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {plan.serviceLimit == null
+                                ? "Accept all services"
+                                : `Accept ${plan.serviceLimit} subscribed service${
+                                    plan.serviceLimit > 1 ? "s" : ""
+                                  }`}
+                            </p>
+                          </div>
+                          <p className="text-base font-bold text-emerald-700">
+                            ₹{plan.price}
+                            <span className="text-xs font-medium text-slate-500">/month</span>
+                          </p>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
+
                   <button
-                    onClick={() => handleSave("services")}
-                    disabled={saving}
-                    className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                    onClick={() => navigate("/partner/subscription")}
+                    className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
                   >
-                    {saving ? "Saving..." : "Save Changes"}
+                    {profile?.subscription?.active ? "Upgrade / Renew Plan" : "Choose a Plan"}
+                  </button>
+                </div>
+              )}
+
+              {expanded === "services" && key === "services" && (
+                <div className="px-5 pb-5">
+                  <p className="mb-3 text-sm text-slate-600">
+                    {profile?.subscription?.active
+                      ? profile.subscription.plan === "all"
+                        ? "Your All Services plan lets you accept every service."
+                        : `You can accept bookings for these services (${profile.subscription.planName} plan):`
+                      : "You have no active subscription. Subscribe to choose the services you can accept."}
+                  </p>
+                  {profile?.subscription?.active && profile.subscription.plan !== "all" && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {(profile.subscription.services || []).map((s) => (
+                        <span
+                          key={s._id}
+                          className="rounded-full border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700"
+                        >
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => navigate("/partner/subscription")}
+                    className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    {profile?.subscription?.active ? "Upgrade / Change Plan" : "View Subscription Plans"}
                   </button>
                 </div>
               )}

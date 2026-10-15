@@ -17,6 +17,7 @@ import {
   FiArrowRight,
   FiCheckCircle,
   FiChevronDown,
+  FiCreditCard,
 } from "react-icons/fi";
 import { LuIndianRupee } from "react-icons/lu";
 
@@ -29,6 +30,7 @@ const NAV_LINKS = [
   { to: "/partner/jobs?tab=new", label: "Service Requests", icon: FiInbox },
   { to: "/partner/jobs?tab=accepted", label: "My Jobs", icon: FiCalendar },
   { to: "/partner/earnings", label: "Earnings", icon: LuIndianRupee },
+  { to: "/partner/subscription", label: "Subscription", icon: FiCreditCard },
   { to: "/partner/profile", label: "Profile", icon: FiUser },
   { to: "/partner/grow", label: "Grow with Us", icon: FiTrendingUp },
   { to: "/partner/profile", label: "Settings", icon: FiSettings },
