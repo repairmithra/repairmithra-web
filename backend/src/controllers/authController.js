@@ -469,9 +469,13 @@ export const registerUser = async (req, res) => {
       _id: verification._id,
     });
 
+    // Log the new customer in straight away
+    const token = generateToken(user._id, user.role);
+
     return res.status(201).json({
       success: true,
       message: "Account created successfully",
+      token,
       data: {
         id: user._id,
         fullName: user.fullName,
