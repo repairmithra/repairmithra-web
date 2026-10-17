@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
-import { setSession, getStoredUser, isTechnician } from "../../utils/auth";
+import { setSession, getStoredUser, getToken, isTechnician } from "../../utils/auth";
 import { API_BASE } from "../../utils/api";
 
 function Login() {
@@ -97,6 +97,16 @@ function Login() {
       setIsLoading(false);
     }
   };
+
+  // Already signed in? The login page is only for logged-out users.
+  if (getToken()) {
+    return (
+      <Navigate
+        to={isTechnician(existingUser) ? "/partner/dashboard" : "/profile"}
+        replace
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12">

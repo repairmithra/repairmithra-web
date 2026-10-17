@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { FiUser, FiLock, FiEye, FiEyeOff, FiLogIn, FiAlertCircle } from "react-icons/fi";
 
 import logo from "../../assets/images/repairmithra-logo.png";
-import { setSession, getStoredUser, isTechnician } from "../../utils/auth";
+import { setSession, getStoredUser, getToken, isTechnician } from "../../utils/auth";
 import { ApiError } from "../../utils/api";
 import { loginPartner } from "./partnerApi";
 
@@ -64,6 +64,16 @@ function PartnerLogin() {
       setIsLoading(false);
     }
   };
+
+  // Already signed in? The login page is only for logged-out users.
+  if (getToken()) {
+    return (
+      <Navigate
+        to={isTechnician(existingUser) ? "/partner/dashboard" : "/profile"}
+        replace
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-emerald-50/60 to-slate-50 px-4 py-12">

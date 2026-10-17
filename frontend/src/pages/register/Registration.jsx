@@ -19,6 +19,7 @@ import {
 import logo from "../../assets/images/repairmithra-logo.png";
 import technician from "../../assets/images/partner/technician-cutout.png";
 import { API_BASE } from "../../utils/api";
+import { setSession } from "../../utils/auth";
 
 function Registration() {
   const navigate = useNavigate();
@@ -513,17 +514,10 @@ function Registration() {
         );
       }
 
-      alert(
-        "Account created successfully!"
-      );
+      // Sign the new customer in and open their dashboard
+      setSession(data.token, data.data);
 
-      navigate("/login", {
-        replace: true,
-        state: {
-          message:
-            "Account created successfully. Please login.",
-        },
-      });
+      navigate("/profile", { replace: true });
     } catch (error) {
       console.error(
         "Registration error:",
